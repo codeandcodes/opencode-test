@@ -82,6 +82,30 @@ func ParseEvents(path string) EventStats {
 	return s
 }
 
+// TailEvents returns the last n valid JSON event lines of an event stream.
+func TailEvents(path string, n int) []json.RawMessage {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
+	var tail []json.RawMessage
+	for sc.Scan() {
+		if !json.Valid(sc.Bytes()) {
+			continue
+		}
+		line := make([]byte, len(sc.Bytes()))
+		copy(line, sc.Bytes())
+		tail = append(tail, line)
+		if len(tail) > n {
+			tail = tail[1:]
+		}
+	}
+	return tail
+}
+
 func windowSeconds(v any) float64 {
 	tm, ok := v.(map[string]any)
 	if !ok {

@@ -361,6 +361,43 @@ func TestVerdictLifecycle(t *testing.T) {
 	}
 }
 
+func TestActiveTail(t *testing.T) {
+	s, _, _ := newTestServer(t, "hang")
+	rr, _ := doJSON(t, s, "GET", "/api/runs/active/tail", nil)
+	if rr.Code != 404 {
+		t.Fatalf("idle tail = %d", rr.Code)
+	}
+	rr, _ = doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}})
+	if rr.Code != 202 {
+		t.Fatalf("start = %d", rr.Code)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	var body map[string]any
+	for {
+		rr, body = doJSON(t, s, "GET", "/api/runs/active/tail", nil)
+		if rr.Code == 200 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("tail never became available: %d", rr.Code)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if body["task"] != "tetris" || body["model"] != "model-a" || body["timestamp"] == "" {
+		t.Fatalf("tail identity: %v", body)
+	}
+	// hang stub writes no events: empty tail, age -1
+	if n := len(body["recent"].([]any)); n != 0 {
+		t.Fatalf("recent = %d events for silent job", n)
+	}
+	if body["last_event_age_sec"].(float64) != -1 {
+		t.Fatalf("age = %v, want -1 with no events", body["last_event_age_sec"])
+	}
+	s.cfg.Runner.Cancel()
+	waitIdle(t, s)
+}
+
 func TestRunsBusy409(t *testing.T) {
 	s, _, _ := newTestServer(t, "hang")
 	rr, _ := doJSON(t, s, "POST", "/api/runs", map[string]any{

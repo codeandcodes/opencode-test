@@ -9,6 +9,7 @@
     type ResumableBatch,
   } from "./api";
   import { fmtTokens, fmtTps, genTokens } from "./fmt";
+  import LivePanel from "./LivePanel.svelte";
   import RunControl from "./RunControl.svelte";
   import StatusChip from "./StatusChip.svelte";
   import type {
@@ -126,6 +127,9 @@
     <p class="resume-msg">{resumeMsg}</p>
   {/if}
   <RunControl {models} {tasks} {active} onchanged={load} />
+  {#if active.running}
+    <LivePanel />
+  {/if}
 
   {#if error}
     <p class="error">{error}</p>

@@ -63,15 +63,34 @@ type Runner struct {
 	// batch can be resumed after a crash or restart.
 	StateFile string
 
-	mu       sync.Mutex
-	running  bool
-	cancel   context.CancelFunc
-	shutdown bool // true when the current cancel is a shutdown, not a user cancel
-	current  Event
-	done     int
-	total    int
-	subs     map[int]chan Event
-	nextSub  int
+	mu         sync.Mutex
+	running    bool
+	cancel     context.CancelFunc
+	shutdown   bool // true when the current cancel is a shutdown, not a user cancel
+	current    Event
+	currentRef store.RunRef
+	haveRef    bool
+	done       int
+	total      int
+	subs       map[int]chan Event
+	nextSub    int
+}
+
+// CurrentRef returns the run directory reference of the job executing right
+// now, if any.
+func (r *Runner) CurrentRef() (store.RunRef, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.running || !r.haveRef {
+		return store.RunRef{}, false
+	}
+	return r.currentRef, true
+}
+
+func (r *Runner) setCurrentRef(ref store.RunRef) {
+	r.mu.Lock()
+	r.currentRef, r.haveRef = ref, true
+	r.mu.Unlock()
 }
 
 // BatchState is the on-disk format of StateFile: jobs not yet completed,
@@ -195,6 +214,7 @@ func (r *Runner) StartBatch(jobs []JobSpec) error {
 			r.mu.Lock()
 			r.running = false
 			r.cancel = nil
+			r.haveRef = false
 			preserve := r.shutdown
 			r.mu.Unlock()
 			if !preserve {
@@ -221,6 +241,7 @@ func (r *Runner) runJob(ctx context.Context, j JobSpec) string {
 	if err != nil {
 		return "error"
 	}
+	r.setCurrentRef(ref)
 	prov := buildProvenance(j.Task, j.Model, r.LlamaSwapConfig)
 	writeProvenance(filepath.Join(r.store.RunPath(ref), "provenance.json"), prov)
 	res := store.Result{Task: j.Task.ID, Model: j.Model, Timestamp: ref.Timestamp,

@@ -92,6 +92,26 @@ export function previewUrl(ref: RunRef, path: string): string {
   return `${runBase(ref)}/preview/${path.split("/").map(enc).join("/")}`;
 }
 
+export interface ActiveTail {
+  task: string;
+  model: string;
+  timestamp: string;
+  steps: number;
+  tool_calls: number;
+  tokens_out: number;
+  last_event_age_sec: number;
+  recent: unknown[];
+}
+
+/** Returns null when no job is executing. */
+export async function getActiveTail(): Promise<ActiveTail | null> {
+  try {
+    return await request<ActiveTail>("/api/runs/active/tail");
+  } catch {
+    return null;
+  }
+}
+
 export interface ResumableBatch {
   jobs: { model: string; task: string }[];
   count: number;

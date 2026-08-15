@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"opencode-bench/internal/config"
 	"opencode-bench/internal/runner"
@@ -45,6 +46,7 @@ func (s *Server) registerAPI() {
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/files", s.handleFilesList)
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/files/{path...}", s.handleFile(false))
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/preview/{path...}", s.handleFile(true))
+	s.mux.HandleFunc("GET /api/runs/active/tail", s.handleActiveTail)
 	s.mux.HandleFunc("GET /api/runs/resumable", s.handleResumableGet)
 	s.mux.HandleFunc("POST /api/runs/resume", s.handleResume)
 	s.mux.HandleFunc("DELETE /api/runs/resumable", s.handleResumableDismiss)
@@ -203,6 +205,45 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]int{"jobs": len(jobs), "skipped": skipped})
+}
+
+// handleActiveTail reports live progress of the currently executing job:
+// identity, event-stream stats, staleness of the last event, and the most
+// recent raw events for a live transcript.
+func (s *Server) handleActiveTail(w http.ResponseWriter, r *http.Request) {
+	ref, ok := s.cfg.Runner.CurrentRef()
+	if !ok {
+		writeErr(w, http.StatusNotFound, errors.New("no job running"))
+		return
+	}
+	eventsPath := filepath.Join(s.cfg.Store.RunPath(ref), "events.jsonl")
+	stats := runner.ParseEvents(eventsPath)
+	recent := runner.TailEvents(eventsPath, 30)
+	if recent == nil {
+		recent = []json.RawMessage{}
+	}
+	ageSec := -1.0
+	if len(recent) > 0 {
+		var last struct {
+			Timestamp float64 `json:"timestamp"`
+		}
+		for i := len(recent) - 1; i >= 0; i-- {
+			if json.Unmarshal(recent[i], &last) == nil && last.Timestamp > 0 {
+				ageSec = float64(time.Now().UnixMilli())/1000 - last.Timestamp/1000
+				break
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"task":               ref.Task,
+		"model":              ref.Model,
+		"timestamp":          ref.Timestamp,
+		"steps":              stats.Messages,
+		"tool_calls":         stats.ToolCalls,
+		"tokens_out":         stats.TokensOut + stats.TokensReasoning,
+		"last_event_age_sec": ageSec,
+		"recent":             recent,
+	})
 }
 
 // filterCompleted drops jobs whose cell already holds a completed

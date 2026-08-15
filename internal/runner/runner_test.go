@@ -233,6 +233,54 @@ func waitForJobStart(t *testing.T, r *Runner) {
 	t.Fatal("no job started")
 }
 
+func TestCurrentRef(t *testing.T) {
+	r, _ := newTestRunner(t, "hang")
+	r.Timeout = func(tasks.Task) time.Duration { return 10 * time.Second }
+	if _, ok := r.CurrentRef(); ok {
+		t.Fatal("idle runner should have no current ref")
+	}
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("t1")}))
+	waitForJobStart(t, r)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if ref, ok := r.CurrentRef(); ok {
+			if ref.Task != "t1" || ref.Model != "m" || ref.Timestamp == "" {
+				t.Fatalf("ref = %+v", ref)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no current ref while job running")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	r.Cancel()
+	drain(t, r)
+	if _, ok := r.CurrentRef(); ok {
+		t.Fatal("ref should clear after batch end")
+	}
+}
+
+func TestTailEvents(t *testing.T) {
+	tail := TailEvents("testdata/real-events.jsonl", 2)
+	if len(tail) != 2 {
+		t.Fatalf("tail = %d lines", len(tail))
+	}
+	var last map[string]any
+	if err := json.Unmarshal(tail[1], &last); err != nil {
+		t.Fatal(err)
+	}
+	if last["type"] != "step_finish" {
+		t.Fatalf("last event = %v", last["type"])
+	}
+	if got := TailEvents("testdata/real-events.jsonl", 100); len(got) != 3 {
+		t.Fatalf("over-sized tail = %d", len(got))
+	}
+	if got := TailEvents("testdata/does-not-exist.jsonl", 5); len(got) != 0 {
+		t.Fatalf("missing file tail = %d", len(got))
+	}
+}
+
 func TestBatchStateLifecycle(t *testing.T) {
 	r, _ := newTestRunner(t, "ok")
 	state := filepath.Join(t.TempDir(), "batch.json")
