@@ -1,0 +1,37 @@
+id: flowchart-editor
+title: "Flowchart Editor"
+category: geometry
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a flowchart editor on an SVG canvas:
+  1. Shape palette: rectangle (process), diamond (decision), ellipse
+     (start/end). Click a palette shape then click the canvas to place
+     it; or drag from the palette onto the canvas.
+  2. Nodes are draggable. Each node exposes four anchor points (top,
+     bottom, left, right).
+  3. Connector tool: click a source anchor, then a target anchor, to
+     create an arrow. Connectors are routed as ORTHOGONAL elbows (only
+     horizontal/vertical segments) that leave and enter perpendicular to
+     their anchors, and they re-route automatically whenever either
+     endpoint node moves.
+  4. Arrowheads on the target end; connectors are selectable and
+     deletable like nodes.
+  5. Inline label editing: double-click a node to edit its text in
+     place; text wraps inside the shape.
+  6. Selection: click selects (visible highlight), shift-click
+     multi-selects, drag on empty canvas rubber-band selects. Delete key
+     removes the selection (connectors attached to a deleted node go
+     with it).
+  7. Undo/redo with at least 50 steps covering every mutation (place,
+     move, connect, edit, delete), bound to ctrl+z / ctrl+y and buttons.
+  8. Arrow keys nudge the selection by 1px (10px with shift).
+  9. Export button downloads the diagram as a standalone .svg file that
+     renders correctly when opened on its own.
+  10. Preload a 5-node demo flowchart with two decision branches so
+      routing behavior is immediately visible.
+  When finished, verify the app opens correctly from index.html.

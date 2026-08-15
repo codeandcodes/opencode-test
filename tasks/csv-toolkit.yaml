@@ -1,0 +1,111 @@
+id: csv-toolkit
+title: "CSV Toolkit CLI"
+category: cli
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory build an executable named ./csvkit (any
+  language; if compiled, also leave the built binary at ./csvkit; if a
+  script, make it executable with a shebang). It reads a CSV file given
+  as the last argument and writes results to stdout. The grader runs a
+  strict assertion battery, so match this contract EXACTLY.
+
+  CSV input handling (RFC 4180): first row is always the header; fields
+  may be quoted with double quotes; quoted fields may contain commas,
+  newlines are not required to be supported inside fields, and embedded
+  quotes are escaped by doubling (""). Input may use \n or \r\n line
+  endings. Output always uses \n.
+
+  Output quoting rule (all subcommands): a field is quoted if and only
+  if it contains a comma or a double quote; embedded quotes are doubled.
+
+  Subcommands:
+  1. ./csvkit select COL1,COL2 FILE — print header + rows containing
+     only the named columns, in the requested order.
+  2. ./csvkit filter 'COL=VALUE' FILE — print header + full rows whose
+     COL equals VALUE exactly (compare the unquoted field value).
+  3. ./csvkit join FILE2 on COL FILE1 — inner join. Output header: all
+     FILE1 columns, then FILE2 columns except COL (in FILE2 order).
+     Row order: FILE1 order; a FILE1 row with multiple matches emits one
+     row per match in FILE2 order.
+  4. ./csvkit agg sum|avg|count COL FILE — print a single line: sum and
+     avg formatted with exactly two decimals (printf %.2f style), count
+     as a plain integer. Non-numeric values are an error for sum/avg.
+     ./csvkit agg sum COL --by KEYCOL FILE — one line per distinct key,
+     format KEY,VALUE, sorted lexicographically by key.
+  5. Errors: unknown column, unknown subcommand, malformed arguments, or
+     non-numeric aggregation input → exit non-zero, write a message to
+     stderr, write NOTHING to stdout.
+check: |
+  set -u
+  fails=0
+  expect() { # name expected_output command...
+    local name="$1" want="$2"; shift 2
+    local got
+    got=$("$@" 2>/dev/null)
+    if [ "$got" != "$want" ]; then
+      echo "FAIL $name"; echo "--- want ---"; printf '%s\n' "$want"
+      echo "--- got ----"; printf '%s\n' "$got"; fails=$((fails+1))
+    fi
+  }
+  expect_err() { # name command...
+    local name="$1"; shift
+    local out err rc
+    out=$("$@" 2>/tmp/csvkit-err); rc=$?
+    err=$(cat /tmp/csvkit-err)
+    if [ $rc -eq 0 ] || [ -n "$out" ] || [ -z "$err" ]; then
+      echo "FAIL $name (rc=$rc stdout='$out' stderr='$err')"; fails=$((fails+1))
+    fi
+  }
+
+  test -x ./csvkit || { echo "no executable ./csvkit"; exit 1; }
+
+  printf 'id,name,dept,salary\n1,Alice,eng,100\n2,"Bob, Jr.",eng,90\n3,Carol,sales,80\n4,"Dana ""D""",sales,70\n5,Eve,hr,60\n' > people.csv
+  printf 'dept,building\r\neng,B1\r\nsales,B2\r\nhr,B3\r\n' > depts.csv
+
+  expect select-basic 'name,salary
+  Alice,100
+  "Bob, Jr.",90
+  Carol,80
+  "Dana ""D""",70
+  Eve,60' ./csvkit select name,salary people.csv
+
+  expect select-reorder 'salary,id
+  100,1
+  90,2
+  80,3
+  70,4
+  60,5' ./csvkit select salary,id people.csv
+
+  expect filter-basic 'id,name,dept,salary
+  3,Carol,sales,80
+  4,"Dana ""D""",sales,70' ./csvkit filter 'dept=sales' people.csv
+
+  expect filter-quoted-value 'id,name,dept,salary
+  2,"Bob, Jr.",eng,90' ./csvkit filter 'name=Bob, Jr.' people.csv
+
+  expect filter-none 'id,name,dept,salary' ./csvkit filter 'dept=absent' people.csv
+
+  expect join-basic 'id,name,dept,salary,building
+  1,Alice,eng,100,B1
+  2,"Bob, Jr.",eng,90,B1
+  3,Carol,sales,80,B2
+  4,"Dana ""D""",sales,70,B2
+  5,Eve,hr,60,B3' ./csvkit join depts.csv on dept people.csv
+
+  expect agg-sum '400.00' ./csvkit agg sum salary people.csv
+  expect agg-avg '80.00' ./csvkit agg avg salary people.csv
+  expect agg-count '5' ./csvkit agg count salary people.csv
+
+  expect agg-by 'eng,190.00
+  hr,60.00
+  sales,150.00' ./csvkit agg sum salary --by dept people.csv
+
+  expect_err unknown-col ./csvkit select nope people.csv
+  expect_err unknown-col-filter ./csvkit filter 'nope=1' people.csv
+  expect_err unknown-subcmd ./csvkit frobnicate people.csv
+  expect_err sum-non-numeric ./csvkit agg sum name people.csv
+  expect_err missing-file ./csvkit select id missing.csv
+
+  if [ $fails -gt 0 ]; then echo "$fails assertion(s) failed"; exit 1; fi
+  echo "all assertions passed"

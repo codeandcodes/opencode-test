@@ -1,0 +1,83 @@
+id: data-dashboard
+title: "Data Dashboard"
+category: dataviz
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Build an interactive dashboard for the messy order data below. Embed the
+  CSV verbatim in your app (e.g. in a <script type="text/csv"> block or a
+  JS string) and parse it at load time — do not clean it by hand first.
+
+  1. Robust CSV parsing: handle quoted fields containing commas, escaped
+     quotes (""), blank/missing values, and inconsistent region casing
+     (normalize e.g. "north"/"North"/"NORTH" to one label). Rows with an
+     unparseable revenue or date are excluded and counted.
+  2. Stat tiles across the top: total revenue, total units, order count,
+     excluded-row count.
+  3. Three hand-rolled SVG charts (no chart libraries): a line chart of
+     weekly revenue over time, a bar chart of revenue by region, and a
+     scatter plot of units vs revenue per order.
+  4. Hover tooltips on all three charts showing exact values.
+  5. Brushing: drag horizontally on the line chart to select a date
+     range; the bar chart, scatter plot, and stat tiles re-render using
+     only orders inside the range. A clear-brush button resets.
+  6. Legend with a color per region; clicking a legend entry toggles that
+     region across ALL charts and the tiles.
+  7. Axes with sensible ticks and labels; charts resize with the window.
+
+  CSV data (embed verbatim):
+  date,region,category,revenue,units
+  2026-01-05,North,Widgets,1200.50,12
+  2026-01-06,south,Gadgets,340.00,4
+  2026-01-09,East,Widgets,890.25,9
+  2026-01-12,WEST,Doohickeys,"1,450.00",15
+  2026-01-14,North,Gadgets,,3
+  2026-01-16,East,Widgets,715.80,7
+  2026-01-19,South,Doohickeys,220.10,2
+  2026-01-21,west,Widgets,1980.00,21
+  2026-01-23,NORTH,Gadgets,505.55,5
+  2026-01-26,East,"Widgets, Deluxe",2250.00,18
+  2026-01-28,South,Widgets,ERROR,6
+  2026-01-30,West,Gadgets,660.40,8
+  2026-02-02,north,Doohickeys,415.00,4
+  2026-02-04,East,Gadgets,"2,100.75",22
+  2026-02-06,South,Widgets,980.00,10
+  2026-02-09,West,"Gizmos ""Pro""",1310.90,11
+  2026-02-11,North,Widgets,845.60,8
+  2026-02-13,east,Doohickeys,150.25,1
+  2026-02-16,South,Gadgets,1725.00,17
+  2026-02-18,West,Widgets,,9
+  2026-02-20,North,"Widgets, Deluxe",3100.00,24
+  2026-02-23,East,Gadgets,590.10,6
+  2026-02-25,SOUTH,Widgets,1050.45,11
+  2026-02-27,West,Doohickeys,240.00,3
+  2026-03-02,North,Gadgets,1480.30,14
+  2026-03-04,East,Widgets,770.00,8
+  2026-03-06,south,"Gizmos ""Pro""",1920.85,16
+  2026-03-09,West,Widgets,1105.00,12
+  2026-03-11,North,Doohickeys,not available,5
+  2026-03-13,East,Gadgets,2455.60,25
+  2026-03-16,South,Widgets,640.75,7
+  2026-03-18,west,Gadgets,830.00,9
+  2026-03-20,North,Widgets,1990.20,19
+  2026-03-23,EAST,Doohickeys,375.50,4
+  2026-03-25,South,Gadgets,1215.00,13
+  2026-03-27,West,"Widgets, Deluxe",2870.40,23
+  2026-03-30,North,Gadgets,955.15,10
+  2026-04-01,East,Widgets,1320.00,14
+  2026-04-03,South,Doohickeys,,2
+  2026-04-06,West,Gadgets,1560.90,15
+  2026-04-08,north,Widgets,725.35,7
+  2026-04-10,East,"Gizmos ""Pro""",2040.00,17
+  2026-04-13,South,Widgets,1130.60,12
+  2026-04-15,West,Doohickeys,310.00,3
+  2026-04-17,NORTH,Gadgets,1685.25,16
+  2026-04-20,East,Widgets,860.00,9
+  2026-04-22,south,Gadgets,1345.80,13
+  2026-04-24,West,Widgets,2210.55,20
+
+  When finished, verify the app opens correctly from index.html.

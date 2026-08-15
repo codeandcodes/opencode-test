@@ -1,0 +1,343 @@
+id: go-algorithms
+title: "Go Algorithm Suite"
+category: backend
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory create a Go module that makes the test suite
+  below pass. Create go.mod (module algo, go 1.22), a file algo_test.go
+  containing EXACTLY the test code shown below, and implementation files
+  (any layout, package algo) that satisfy it. Do not modify the tests —
+  the grader restores the canonical test file before running, so only
+  your implementation matters. The grader runs:
+  go vet ./... && go test -race ./...
+
+  ```go
+  package algo
+
+  import (
+  	"reflect"
+  	"testing"
+  	"time"
+  )
+
+  func TestIntervalSet(t *testing.T) {
+  	s := NewIntervalSet()
+  	s.Add(1, 5)
+  	s.Add(10, 15)
+  	s.Add(4, 11) // bridges both -> [1,15]
+  	if got := s.Intervals(); !reflect.DeepEqual(got, [][2]int{{1, 15}}) {
+  		t.Fatalf("merge: %v", got)
+  	}
+  	s.Subtract(6, 8) // -> [1,6) [8,15]  using half-open [lo,hi)
+  	want := [][2]int{{1, 6}, {8, 15}}
+  	if got := s.Intervals(); !reflect.DeepEqual(got, want) {
+  		t.Fatalf("subtract: %v want %v", got, want)
+  	}
+  	for _, tc := range []struct {
+  		p  int
+  		in bool
+  	}{{0, false}, {1, true}, {5, true}, {6, false}, {7, false}, {8, true}, {14, true}, {15, false}} {
+  		if s.Contains(tc.p) != tc.in {
+  			t.Fatalf("Contains(%d) != %v", tc.p, tc.in)
+  		}
+  	}
+  	s.Add(20, 20) // empty interval is a no-op
+  	if got := s.Intervals(); !reflect.DeepEqual(got, want) {
+  		t.Fatalf("empty add changed set: %v", got)
+  	}
+  	other := NewIntervalSet()
+  	other.Add(5, 9)
+  	u := s.Union(other)
+  	if got := u.Intervals(); !reflect.DeepEqual(got, [][2]int{{1, 15}}) {
+  		t.Fatalf("union: %v", got)
+  	}
+  }
+
+  func TestTopoSort(t *testing.T) {
+  	g := map[string][]string{
+  		"a": {"b", "c"},
+  		"b": {"d"},
+  		"c": {"d"},
+  		"d": {},
+  		"e": {},
+  	}
+  	got, err := TopoSort(g)
+  	if err != nil {
+  		t.Fatal(err)
+  	}
+  	// deterministic: lexicographically smallest available node first
+  	want := []string{"a", "b", "c", "d", "e"}
+  	if !reflect.DeepEqual(got, want) {
+  		t.Fatalf("order %v want %v", got, want)
+  	}
+  	if _, err := TopoSort(map[string][]string{"x": {"y"}, "y": {"x"}}); err == nil {
+  		t.Fatal("cycle not detected")
+  	}
+  	// edges to undeclared nodes count as nodes
+  	got, err = TopoSort(map[string][]string{"m": {"z"}})
+  	if err != nil || !reflect.DeepEqual(got, []string{"m", "z"}) {
+  		t.Fatalf("implicit node: %v %v", got, err)
+  	}
+  }
+
+  func TestTTLCache(t *testing.T) {
+  	base := time.Unix(1000, 0)
+  	now := base
+  	c := NewTTLCache(2, func() time.Time { return now })
+  	c.Put("a", 1, time.Second)
+  	c.Put("b", 2, 10*time.Second)
+  	if v, ok := c.Get("a"); !ok || v != 1 {
+  		t.Fatalf("a: %v %v", v, ok)
+  	}
+  	now = base.Add(2 * time.Second) // a expired
+  	if _, ok := c.Get("a"); ok {
+  		t.Fatal("expired entry returned")
+  	}
+  	if c.Len() != 1 {
+  		t.Fatalf("Len=%d want 1 (expired removed or uncounted)", c.Len())
+  	}
+  	c.Put("c", 3, 10*time.Second)
+  	c.Put("d", 4, 10*time.Second) // capacity 2: evicts LRU ("b")
+  	if _, ok := c.Get("b"); ok {
+  		t.Fatal("lru not evicted")
+  	}
+  	if v, ok := c.Get("c"); !ok || v != 3 {
+  		t.Fatalf("c: %v %v", v, ok)
+  	}
+  	// Get refreshes recency: touch c, then add e -> evicts d
+  	c.Put("e", 5, 10*time.Second)
+  	if _, ok := c.Get("d"); ok {
+  		t.Fatal("d should be evicted after c was touched")
+  	}
+  }
+
+  func TestGlob(t *testing.T) {
+  	for _, tc := range []struct {
+  		pat, s string
+  		want   bool
+  	}{
+  		{"*", "anything", true},
+  		{"a*b", "ab", true},
+  		{"a*b", "axxb", true},
+  		{"a*b", "axxbc", false},
+  		{"a?c", "abc", true},
+  		{"a?c", "ac", false},
+  		{"[a-c]x", "bx", true},
+  		{"[a-c]x", "dx", false},
+  		{"[a-c]*[0-9]", "b-hello7", true},
+  		{"*.go", "main.go", true},
+  		{"*.go", "main.gox", false},
+  		{"a*b*c", "aXbYbZc", true},
+  		{"", "", true},
+  		{"", "x", false},
+  	} {
+  		if got := Glob(tc.pat, tc.s); got != tc.want {
+  			t.Fatalf("Glob(%q,%q)=%v want %v", tc.pat, tc.s, got, tc.want)
+  		}
+  	}
+  }
+
+  func TestTokenBucket(t *testing.T) {
+  	base := time.Unix(2000, 0)
+  	// 2 tokens/sec, burst 3
+  	tb := NewTokenBucket(2, 3)
+  	for i := 0; i < 3; i++ {
+  		if !tb.Allow(base) {
+  			t.Fatalf("burst request %d denied", i)
+  		}
+  	}
+  	if tb.Allow(base) {
+  		t.Fatal("burst exceeded")
+  	}
+  	// after 500ms one token accrued
+  	if !tb.Allow(base.Add(500 * time.Millisecond)) {
+  		t.Fatal("refilled token denied")
+  	}
+  	if tb.Allow(base.Add(500 * time.Millisecond)) {
+  		t.Fatal("over-refilled")
+  	}
+  	// refill caps at burst
+  	late := base.Add(time.Hour)
+  	for i := 0; i < 3; i++ {
+  		if !tb.Allow(late) {
+  			t.Fatalf("capped burst request %d denied", i)
+  		}
+  	}
+  	if tb.Allow(late) {
+  		t.Fatal("burst cap exceeded")
+  	}
+  }
+  ```
+
+  API notes implied by the tests: NewIntervalSet() *IntervalSet with
+  Add(lo, hi int), Subtract(lo, hi int), Contains(p int) bool,
+  Union(*IntervalSet) *IntervalSet, Intervals() [][2]int over half-open
+  [lo,hi) intervals returned normalized (sorted, disjoint, merged).
+  TopoSort(map[string][]string) ([]string, error). NewTTLCache(capacity,
+  nowFn) with Put(key string, val any, ttl time.Duration), Get(key) (any,
+  bool), Len() int. Glob(pattern, s string) bool. NewTokenBucket(ratePerSec
+  float64, burst int) with Allow(now time.Time) bool.
+check: |
+  set -e
+  test -f go.mod || { echo "no go.mod"; exit 1; }
+  # restore the canonical test file; agent modifications are irrelevant
+  cat > algo_test.go <<'GOEOF'
+  package algo
+
+  import (
+  	"reflect"
+  	"testing"
+  	"time"
+  )
+
+  func TestIntervalSet(t *testing.T) {
+  	s := NewIntervalSet()
+  	s.Add(1, 5)
+  	s.Add(10, 15)
+  	s.Add(4, 11) // bridges both -> [1,15]
+  	if got := s.Intervals(); !reflect.DeepEqual(got, [][2]int{{1, 15}}) {
+  		t.Fatalf("merge: %v", got)
+  	}
+  	s.Subtract(6, 8) // -> [1,6) [8,15]  using half-open [lo,hi)
+  	want := [][2]int{{1, 6}, {8, 15}}
+  	if got := s.Intervals(); !reflect.DeepEqual(got, want) {
+  		t.Fatalf("subtract: %v want %v", got, want)
+  	}
+  	for _, tc := range []struct {
+  		p  int
+  		in bool
+  	}{{0, false}, {1, true}, {5, true}, {6, false}, {7, false}, {8, true}, {14, true}, {15, false}} {
+  		if s.Contains(tc.p) != tc.in {
+  			t.Fatalf("Contains(%d) != %v", tc.p, tc.in)
+  		}
+  	}
+  	s.Add(20, 20) // empty interval is a no-op
+  	if got := s.Intervals(); !reflect.DeepEqual(got, want) {
+  		t.Fatalf("empty add changed set: %v", got)
+  	}
+  	other := NewIntervalSet()
+  	other.Add(5, 9)
+  	u := s.Union(other)
+  	if got := u.Intervals(); !reflect.DeepEqual(got, [][2]int{{1, 15}}) {
+  		t.Fatalf("union: %v", got)
+  	}
+  }
+
+  func TestTopoSort(t *testing.T) {
+  	g := map[string][]string{
+  		"a": {"b", "c"},
+  		"b": {"d"},
+  		"c": {"d"},
+  		"d": {},
+  		"e": {},
+  	}
+  	got, err := TopoSort(g)
+  	if err != nil {
+  		t.Fatal(err)
+  	}
+  	// deterministic: lexicographically smallest available node first
+  	want := []string{"a", "b", "c", "d", "e"}
+  	if !reflect.DeepEqual(got, want) {
+  		t.Fatalf("order %v want %v", got, want)
+  	}
+  	if _, err := TopoSort(map[string][]string{"x": {"y"}, "y": {"x"}}); err == nil {
+  		t.Fatal("cycle not detected")
+  	}
+  	// edges to undeclared nodes count as nodes
+  	got, err = TopoSort(map[string][]string{"m": {"z"}})
+  	if err != nil || !reflect.DeepEqual(got, []string{"m", "z"}) {
+  		t.Fatalf("implicit node: %v %v", got, err)
+  	}
+  }
+
+  func TestTTLCache(t *testing.T) {
+  	base := time.Unix(1000, 0)
+  	now := base
+  	c := NewTTLCache(2, func() time.Time { return now })
+  	c.Put("a", 1, time.Second)
+  	c.Put("b", 2, 10*time.Second)
+  	if v, ok := c.Get("a"); !ok || v != 1 {
+  		t.Fatalf("a: %v %v", v, ok)
+  	}
+  	now = base.Add(2 * time.Second) // a expired
+  	if _, ok := c.Get("a"); ok {
+  		t.Fatal("expired entry returned")
+  	}
+  	if c.Len() != 1 {
+  		t.Fatalf("Len=%d want 1 (expired removed or uncounted)", c.Len())
+  	}
+  	c.Put("c", 3, 10*time.Second)
+  	c.Put("d", 4, 10*time.Second) // capacity 2: evicts LRU ("b")
+  	if _, ok := c.Get("b"); ok {
+  		t.Fatal("lru not evicted")
+  	}
+  	if v, ok := c.Get("c"); !ok || v != 3 {
+  		t.Fatalf("c: %v %v", v, ok)
+  	}
+  	// Get refreshes recency: touch c, then add e -> evicts d
+  	c.Put("e", 5, 10*time.Second)
+  	if _, ok := c.Get("d"); ok {
+  		t.Fatal("d should be evicted after c was touched")
+  	}
+  }
+
+  func TestGlob(t *testing.T) {
+  	for _, tc := range []struct {
+  		pat, s string
+  		want   bool
+  	}{
+  		{"*", "anything", true},
+  		{"a*b", "ab", true},
+  		{"a*b", "axxb", true},
+  		{"a*b", "axxbc", false},
+  		{"a?c", "abc", true},
+  		{"a?c", "ac", false},
+  		{"[a-c]x", "bx", true},
+  		{"[a-c]x", "dx", false},
+  		{"[a-c]*[0-9]", "b-hello7", true},
+  		{"*.go", "main.go", true},
+  		{"*.go", "main.gox", false},
+  		{"a*b*c", "aXbYbZc", true},
+  		{"", "", true},
+  		{"", "x", false},
+  	} {
+  		if got := Glob(tc.pat, tc.s); got != tc.want {
+  			t.Fatalf("Glob(%q,%q)=%v want %v", tc.pat, tc.s, got, tc.want)
+  		}
+  	}
+  }
+
+  func TestTokenBucket(t *testing.T) {
+  	base := time.Unix(2000, 0)
+  	// 2 tokens/sec, burst 3
+  	tb := NewTokenBucket(2, 3)
+  	for i := 0; i < 3; i++ {
+  		if !tb.Allow(base) {
+  			t.Fatalf("burst request %d denied", i)
+  		}
+  	}
+  	if tb.Allow(base) {
+  		t.Fatal("burst exceeded")
+  	}
+  	// after 500ms one token accrued
+  	if !tb.Allow(base.Add(500 * time.Millisecond)) {
+  		t.Fatal("refilled token denied")
+  	}
+  	if tb.Allow(base.Add(500 * time.Millisecond)) {
+  		t.Fatal("over-refilled")
+  	}
+  	// refill caps at burst
+  	late := base.Add(time.Hour)
+  	for i := 0; i < 3; i++ {
+  		if !tb.Allow(late) {
+  			t.Fatalf("capped burst request %d denied", i)
+  		}
+  	}
+  	if tb.Allow(late) {
+  		t.Fatal("burst cap exceeded")
+  	}
+  }
+  GOEOF
+  go vet ./...
+  go test -race ./...

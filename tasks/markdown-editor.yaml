@@ -1,0 +1,38 @@
+id: markdown-editor
+title: "Markdown Editor"
+category: parsing
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a split-pane markdown editor with a HAND-WRITTEN parser. Do
+  not use any markdown or highlighting library; write the parser and
+  highlighter from scratch.
+  1. Left pane: plain textarea (or contenteditable) editor. Right pane:
+     rendered HTML preview, updating live on every input.
+  2. The parser must support: ATX headings (# through ######), bold
+     (**text**), italic (*text*), inline code (`code`), links
+     [text](url), images ![alt](url) (data: URIs allowed), blockquotes
+     (> nesting), horizontal rules (---), ordered and unordered lists
+     with arbitrary nesting by indentation, and pipe tables with a
+     header row and alignment markers (:---, :---:, ---:).
+  3. Fenced code blocks (```js ... ```): when the language is js or
+     javascript, apply syntax highlighting produced by your own
+     tokenizer that distinguishes keywords, strings (both quote styles
+     plus template literals), comments (line and block), numbers, and
+     punctuation, each with a distinct CSS class. Other languages render
+     unhighlighted but preserved verbatim (HTML-escaped).
+  4. Raw HTML in the source must be escaped, never executed.
+  5. Synchronized proportional scrolling: scrolling the editor scrolls
+     the preview to the matching fraction, and vice versa, without
+     feedback loops.
+  6. Autosave: persist the document to localStorage at most once per
+     second while typing. Keep the last 20 saves as a version history in
+     a dropdown showing timestamps; selecting one restores that version
+     (current text is saved first).
+  7. Preload the editor with a demo document that exercises every
+     supported construct, including a JS code block and a table.
+  When finished, verify the app opens correctly from index.html.

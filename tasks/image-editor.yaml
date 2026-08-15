@@ -1,0 +1,37 @@
+id: image-editor
+title: "Image Editor"
+category: pixels
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a non-destructive image editor on canvas:
+  1. Load an image via <input type="file"> (also generate and offer a
+     built-in 400x300 test image — e.g. drawn gradients and shapes — so
+     the app is demonstrable without picking a file).
+  2. Crop tool: drag a rectangle over the image with dimmed outside
+     region and visible handles; apply commits the crop. Rotate buttons
+     turn the image 90 degrees clockwise/counterclockwise.
+  3. Filters implemented MANUALLY on canvas ImageData pixel arrays — CSS
+     filters and ctx.filter are forbidden: brightness (-100..100),
+     contrast (-100..100), saturation (-100..100), plus 3x3 convolution
+     kernels: box blur, sharpen, and edge detect. Convolution must
+     handle image edges (clamp sampling) and normalize kernel weights
+     where appropriate.
+  4. Non-destructive filter stack: each applied filter (with its
+     parameter) appends to a visible ordered list; entries can be
+     removed or reordered by drag, and the preview re-renders the ENTIRE
+     stack from the original (cropped/rotated) pixels each time.
+     Geometry operations (crop/rotate) rebase the original.
+  5. Before/after: a button or held-down toggle that shows the unfiltered
+     base image for comparison.
+  6. Performance: filter application on a 1-2 megapixel image must not
+     freeze the UI thread noticeably; batch work in chunks or use typed
+     arrays efficiently, and show a subtle busy indicator while
+     rendering.
+  7. Export button downloads the current result as a PNG.
+  8. Status bar showing image dimensions and the active tool.
+  When finished, verify the app opens correctly from index.html.

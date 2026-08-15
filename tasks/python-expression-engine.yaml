@@ -1,0 +1,186 @@
+id: python-expression-engine
+title: "Python Expression Engine"
+category: parsing
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory create engine.py implementing
+  evaluate(expr, variables=None) — a from-scratch expression evaluator.
+  You may NOT use eval, exec, or the ast module in engine.py: write a
+  tokenizer and recursive-descent (or Pratt) parser yourself. The test
+  suite below is the specification; the grader restores the canonical
+  test file before running, so only engine.py matters. The grader runs:
+  python3 -m pytest -q test_engine.py
+
+  ```python
+  import pytest
+  from engine import evaluate, ExpressionError
+
+
+  def test_arithmetic_precedence():
+      assert evaluate("1+2*3") == 7
+      assert evaluate("(1+2)*3") == 9
+      assert evaluate("2+3*4**2") == 50
+      assert evaluate("10-4-3") == 3          # left assoc
+      assert evaluate("2**3**2") == 512        # ** right assoc
+      assert evaluate("7//2") == 3
+      assert evaluate("7%3") == 1
+      assert evaluate("7/2") == 3.5
+
+
+  def test_unary():
+      assert evaluate("-3+5") == 2
+      assert evaluate("--3") == 3
+      assert evaluate("2*-3") == -6
+      assert evaluate("-2**2") == -4           # like python: -(2**2)
+
+
+  def test_comparisons():
+      assert evaluate("1 < 2") is True
+      assert evaluate("2 <= 1") is False
+      assert evaluate("3 == 3") is True
+      assert evaluate("3 != 3") is False
+      assert evaluate("2+2 == 4") is True
+      assert evaluate("1 > 2") is False
+      assert evaluate("2 >= 2") is True
+
+
+  def test_variables():
+      assert evaluate("x + y", {"x": 2, "y": 40}) == 42
+      assert evaluate("price * (1 + tax)", {"price": 100, "tax": 0.2}) == pytest.approx(120.0)
+      with pytest.raises(ExpressionError):
+          evaluate("unknown_var")
+
+
+  def test_functions():
+      assert evaluate("min(3, 1, 2)") == 1
+      assert evaluate("max(3, 1, 2)") == 3
+      assert evaluate("abs(-5)") == 5
+      assert evaluate("round(2.567, 2)") == 2.57
+      assert evaluate("round(2.5)") == 2
+      assert evaluate("min(max(1, 2), abs(-3))") == 2
+      with pytest.raises(ExpressionError):
+          evaluate("nosuchfn(1)")
+
+
+  def test_errors():
+      for bad in ["", "1 +", "(1+2", "1+2)", "1 2", "1 ++", "*3", "min()", "1 @ 2"]:
+          with pytest.raises(ExpressionError):
+              evaluate(bad)
+      with pytest.raises(ZeroDivisionError):
+          evaluate("1/0")
+      with pytest.raises(ZeroDivisionError):
+          evaluate("1//0")
+      with pytest.raises(ZeroDivisionError):
+          evaluate("1%0")
+
+
+  def test_whitespace_robustness():
+      assert evaluate("  1\t+\n2 ") == 3
+      assert evaluate("min( 1 , 2 )") == 1
+
+
+  def test_deep_nesting():
+      expr = "(" * 200 + "1" + ")" * 200
+      assert evaluate(expr) == 1
+      expr = "+".join(["1"] * 500)
+      assert evaluate(expr) == 500
+
+
+  def test_no_cheating():
+      src = open("engine.py").read()
+      assert "import ast" not in src
+      assert "eval(" not in src.replace("evaluate(", "")
+      assert "exec(" not in src
+  ```
+
+  Notes: ExpressionError is your own exception class for malformed input
+  and unknown identifiers/functions. Numeric semantics follow Python
+  (ints stay ints where Python's operators keep them; / always float,
+  // floor division). True/False are Python booleans.
+check: |
+  set -e
+  test -f engine.py || { echo "no engine.py"; exit 1; }
+  # restore the canonical test file; agent modifications are irrelevant
+  cat > test_engine.py <<'PYEOF'
+  import pytest
+  from engine import evaluate, ExpressionError
+
+
+  def test_arithmetic_precedence():
+      assert evaluate("1+2*3") == 7
+      assert evaluate("(1+2)*3") == 9
+      assert evaluate("2+3*4**2") == 50
+      assert evaluate("10-4-3") == 3          # left assoc
+      assert evaluate("2**3**2") == 512        # ** right assoc
+      assert evaluate("7//2") == 3
+      assert evaluate("7%3") == 1
+      assert evaluate("7/2") == 3.5
+
+
+  def test_unary():
+      assert evaluate("-3+5") == 2
+      assert evaluate("--3") == 3
+      assert evaluate("2*-3") == -6
+      assert evaluate("-2**2") == -4           # like python: -(2**2)
+
+
+  def test_comparisons():
+      assert evaluate("1 < 2") is True
+      assert evaluate("2 <= 1") is False
+      assert evaluate("3 == 3") is True
+      assert evaluate("3 != 3") is False
+      assert evaluate("2+2 == 4") is True
+      assert evaluate("1 > 2") is False
+      assert evaluate("2 >= 2") is True
+
+
+  def test_variables():
+      assert evaluate("x + y", {"x": 2, "y": 40}) == 42
+      assert evaluate("price * (1 + tax)", {"price": 100, "tax": 0.2}) == pytest.approx(120.0)
+      with pytest.raises(ExpressionError):
+          evaluate("unknown_var")
+
+
+  def test_functions():
+      assert evaluate("min(3, 1, 2)") == 1
+      assert evaluate("max(3, 1, 2)") == 3
+      assert evaluate("abs(-5)") == 5
+      assert evaluate("round(2.567, 2)") == 2.57
+      assert evaluate("round(2.5)") == 2
+      assert evaluate("min(max(1, 2), abs(-3))") == 2
+      with pytest.raises(ExpressionError):
+          evaluate("nosuchfn(1)")
+
+
+  def test_errors():
+      for bad in ["", "1 +", "(1+2", "1+2)", "1 2", "1 ++", "*3", "min()", "1 @ 2"]:
+          with pytest.raises(ExpressionError):
+              evaluate(bad)
+      with pytest.raises(ZeroDivisionError):
+          evaluate("1/0")
+      with pytest.raises(ZeroDivisionError):
+          evaluate("1//0")
+      with pytest.raises(ZeroDivisionError):
+          evaluate("1%0")
+
+
+  def test_whitespace_robustness():
+      assert evaluate("  1\t+\n2 ") == 3
+      assert evaluate("min( 1 , 2 )") == 1
+
+
+  def test_deep_nesting():
+      expr = "(" * 200 + "1" + ")" * 200
+      assert evaluate(expr) == 1
+      expr = "+".join(["1"] * 500)
+      assert evaluate(expr) == 500
+
+
+  def test_no_cheating():
+      src = open("engine.py").read()
+      assert "import ast" not in src
+      assert "eval(" not in src.replace("evaluate(", "")
+      assert "exec(" not in src
+  PYEOF
+  python3 -m pytest -q test_engine.py

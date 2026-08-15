@@ -1,0 +1,35 @@
+id: kanban
+title: "Kanban Board"
+category: interaction
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a kanban board with disciplined drag-and-drop:
+  1. Default columns: Backlog, In Progress (WIP limit 3), Review (WIP
+     limit 2), Done. Column header shows count and limit (e.g. 2/3).
+  2. Cards have title, description, colored labels (at least 4 preset
+     label colors), and an optional due date; overdue dates render red.
+  3. Drag and drop: cards drag between and within columns with a visible
+     insertion indicator at the exact drop position; the dragged card is
+     visually distinct; drops reorder correctly at top, middle, and
+     bottom positions.
+  4. WIP limits are enforced: while dragging over a full column, the
+     column shows a red rejection state and the drop is refused (card
+     returns to origin).
+  5. Columns themselves reorder by dragging their headers.
+  6. Card create (per-column add button), edit (click card opens dialog),
+     delete (from dialog, with confirm).
+  7. Filter bar: free-text search over title/description plus label
+     toggle buttons; non-matching cards hide, empty columns remain.
+  8. Undo (ctrl+z and a button) covering at least the last 20 mutations:
+     moves, creates, edits, deletes, column reorders.
+  9. Everything persists to localStorage and restores on reload,
+     including column order and card order.
+  10. Preload a demo board (10+ cards with mixed labels and due dates,
+      In Progress at its WIP limit) so limits and filtering are
+      immediately demonstrable.
+  When finished, verify the app opens correctly from index.html.
