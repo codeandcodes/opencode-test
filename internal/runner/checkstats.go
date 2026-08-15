@@ -9,6 +9,7 @@ import (
 var (
 	pytestRe    = regexp.MustCompile(`(?:(\d+) failed, )?(\d+) passed`)
 	assertionRe = regexp.MustCompile(`(\d+) assertion\(s\) failed`)
+	goOkRe      = regexp.MustCompile(`(?m)^ok\s+\S+`)
 )
 
 // ParseCheckLog extracts pass/fail counts from a check script's output.
@@ -37,6 +38,10 @@ func ParseCheckLog(log string) (passed, failed int, parsed bool) {
 		return 0, failed, true
 	}
 	if strings.Contains(log, "all assertions passed") {
+		return 0, 0, true
+	}
+	// non-verbose `go test` success ("ok  	pkg	0.5s"): all pass, count unknown
+	if goOkRe.MatchString(log) {
 		return 0, 0, true
 	}
 	return 0, 0, false

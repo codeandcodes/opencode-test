@@ -14,6 +14,7 @@ func TestParseCheckLog(t *testing.T) {
 		{"go test -v", "=== RUN   TestA\n--- PASS: TestA (0.00s)\n=== RUN   TestB\n--- FAIL: TestB (0.01s)\n--- PASS: TestC (0.00s)\nFAIL\nexit status 1\n", 2, 1, true},
 		{"bash battery failures", "FAIL select-basic\nFAIL agg-sum\n2 assertion(s) failed\n", 0, 2, true},
 		{"bash battery success", "all assertions passed\n", 0, 0, true},
+		{"go test non-verbose ok", "ok  \talgo\t1.068s\n", 0, 0, true},
 		{"unrecognized", "compilation error: blah\n", 0, 0, false},
 		{"empty", "", 0, 0, false},
 	}

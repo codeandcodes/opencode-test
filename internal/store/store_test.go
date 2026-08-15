@@ -174,6 +174,8 @@ func TestListFiles(t *testing.T) {
 	st := New(t.TempDir())
 	ref, ws, _ := st.NewRunDir("tetris", "m")
 	os.MkdirAll(filepath.Join(ws, "css"), 0o755)
+	os.MkdirAll(filepath.Join(ws, ".git", "objects"), 0o755)
+	os.WriteFile(filepath.Join(ws, ".git", "config"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(ws, "index.html"), []byte("<html>"), 0o644)
 	os.WriteFile(filepath.Join(ws, "css", "app.css"), []byte("body{}"), 0o644)
 	files, err := st.ListFiles(ref)

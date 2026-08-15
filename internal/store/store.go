@@ -281,6 +281,9 @@ func (s *Store) ListFiles(ref RunRef) ([]FileEntry, error) {
 		if p == ws {
 			return nil
 		}
+		if d.IsDir() && d.Name() == ".git" {
+			return fs.SkipDir
+		}
 		rel, err := filepath.Rel(ws, p)
 		if err != nil {
 			return err

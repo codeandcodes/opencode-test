@@ -108,6 +108,11 @@ func TestRunReviewTaskOK(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(ws, "hello.txt")); err != nil {
 		t.Fatalf("workspace file missing: %v", err)
 	}
+	// The workspace must be its own git repo so the agent's project-root
+	// discovery anchors here instead of walking up into the harness repo.
+	if _, err := os.Stat(filepath.Join(ws, ".git")); err != nil {
+		t.Fatalf("workspace is not a git repo: %v", err)
+	}
 }
 
 func TestProvenanceCaptured(t *testing.T) {

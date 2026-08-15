@@ -256,6 +256,12 @@ func (r *Runner) runJob(ctx context.Context, j JobSpec) string {
 		return "error"
 	}
 	r.setCurrentRef(ref)
+	// Anchor the agent's project-root discovery at the workspace: without
+	// its own .git, opencode walks up and finds the harness repo, and
+	// models then write into the repo root via absolute "project" paths.
+	gitInit := exec.Command("git", "init", "-q")
+	gitInit.Dir = ws
+	gitInit.Run() // best-effort
 	prov := buildProvenance(j.Task, j.Model, r.LlamaSwapConfig)
 	writeProvenance(filepath.Join(r.store.RunPath(ref), "provenance.json"), prov)
 	res := store.Result{Task: j.Task.ID, Model: j.Model, Timestamp: ref.Timestamp,
