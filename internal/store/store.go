@@ -30,8 +30,9 @@ type Result struct {
 	TokensReasoning int `json:"tokens_reasoning"`
 	// CacheRead counts prompt tokens served from the provider's cache.
 	CacheRead int `json:"cache_read"`
-	// GenSeconds sums the text/reasoning part generation windows from the
-	// event stream — active generation time, excluding tool waits and load.
+	// GenSeconds is model-active time from the event stream: step windows
+	// minus tool execution. Includes prompt processing; the first step also
+	// includes model load.
 	GenSeconds float64 `json:"gen_seconds"`
 	Error      string  `json:"error,omitempty"`
 	Timestamp  string  `json:"timestamp"`

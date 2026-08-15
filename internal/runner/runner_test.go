@@ -64,8 +64,9 @@ func TestParseEventsRealStream(t *testing.T) {
 	if s.TokensIn != 7814 || s.TokensOut != 2 || s.TokensReasoning != 0 {
 		t.Fatalf("tokens: %+v", s)
 	}
-	// text part window: 1786805672184 -> 1786805672297 = 113ms
-	if s.GenSeconds < 0.112 || s.GenSeconds > 0.114 {
+	// step window: 1786805631922 -> 1786805672309 = 40.387s (includes the
+	// model swap/load on this cold start; amortizes over real runs)
+	if s.GenSeconds < 40.38 || s.GenSeconds > 40.39 {
 		t.Fatalf("gen seconds: %+v", s)
 	}
 }
@@ -87,8 +88,8 @@ func TestRunReviewTaskOK(t *testing.T) {
 	if res.TokensReasoning != 50 || res.CacheRead != 40 {
 		t.Fatalf("reasoning/cache stats wrong: %+v", res)
 	}
-	if res.GenSeconds < 1.99 || res.GenSeconds > 2.01 {
-		t.Fatalf("gen seconds = %v, want 2.0 from text part time span", res.GenSeconds)
+	if res.GenSeconds < 0.99 || res.GenSeconds > 1.01 {
+		t.Fatalf("gen seconds = %v, want 1.0 from step window (2000-1000ms)", res.GenSeconds)
 	}
 	ws := filepath.Join(st.RunPath(store.RunRef{Task: "tetris", Model: "model-a", Timestamp: res.Timestamp}), "workspace")
 	if _, err := os.Stat(filepath.Join(ws, "hello.txt")); err != nil {

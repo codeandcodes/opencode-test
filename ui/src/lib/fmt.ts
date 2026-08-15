@@ -14,9 +14,9 @@ export function genTokens(r: Result): number {
 }
 
 /**
- * Generation speed in tokens/sec over active generation time (text and
- * reasoning part windows), excluding tool execution and model load.
- * Null when the event stream carried no timing info.
+ * Generation speed in tokens/sec over model-active time (step windows
+ * minus tool execution). Includes prompt processing; the first step also
+ * includes model load. Null when the event stream carried no timing info.
  */
 export function genTps(r: Result): number | null {
   const out = genTokens(r);
