@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { getActiveTail, type ActiveTail } from "./api";
+  import { getActiveTail, getFiles, previewUrl, type ActiveTail } from "./api";
   import { fmtTokens } from "./fmt";
   import Transcript from "./Transcript.svelte";
 
   let tail = $state<ActiveTail | null>(null);
   let showTranscript = $state(false);
+  let showBuild = $state(false);
+  let hasIndex = $state(false);
+  let previewSrc = $state("");
 
   $effect(() => {
     let stop = false;
@@ -15,6 +18,35 @@
       }
     }
     poll();
+    return () => {
+      stop = true;
+    };
+  });
+
+  // Watch-it-build: while the job runs, check for index.html and refresh
+  // the preview every 10s (cache-busted so the iframe reloads).
+  $effect(() => {
+    if (!showBuild) return;
+    let stop = false;
+    async function refreshPreview() {
+      while (!stop) {
+        const t = tail;
+        if (t) {
+          const ref = { task: t.task, model: t.model, timestamp: t.timestamp };
+          try {
+            const files = await getFiles(ref);
+            hasIndex = files.some((f) => f.path === "index.html");
+            if (hasIndex) {
+              previewSrc = previewUrl(ref, "index.html") + "?t=" + Date.now();
+            }
+          } catch {
+            hasIndex = false;
+          }
+        }
+        await new Promise((r) => setTimeout(r, 10000));
+      }
+    }
+    refreshPreview();
     return () => {
       stop = true;
     };
@@ -50,11 +82,33 @@
       <button
         type="button"
         class="toggle"
+        onclick={() => (showBuild = !showBuild)}
+      >
+        {showBuild ? "hide" : "watch"} it build
+      </button>
+      <button
+        type="button"
+        class="toggle"
         onclick={() => (showTranscript = !showTranscript)}
       >
         {showTranscript ? "hide" : "show"} live transcript
       </button>
     </div>
+    {#if showBuild}
+      {#if hasIndex && previewSrc}
+        <iframe
+          class="build-preview"
+          title="live build preview"
+          sandbox="allow-scripts"
+          src={previewSrc}
+        ></iframe>
+        <span class="preview-note">
+          refreshes every 10s — the app may be half-built
+        </span>
+      {:else}
+        <span class="preview-note">no index.html in the workspace yet…</span>
+      {/if}
+    {/if}
     {#if showTranscript}
       <div class="transcript">
         <Transcript events={tail.recent} />
@@ -112,12 +166,26 @@
   .toggle {
     font: inherit;
     font-size: 0.8rem;
-    margin-left: auto;
     background: none;
     border: none;
     color: var(--muted);
     text-decoration: underline;
     cursor: pointer;
+  }
+  .toggle:first-of-type {
+    margin-left: auto;
+  }
+  .build-preview {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+  }
+  .preview-note {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-style: italic;
   }
   .transcript {
     max-height: 20rem;
