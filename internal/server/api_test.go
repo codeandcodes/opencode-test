@@ -185,6 +185,43 @@ func TestRunsLifecycle(t *testing.T) {
 	}
 }
 
+func TestSamplesEnsureCount(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	// fresh cell, samples=3 -> 3 jobs
+	rr, resp := doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}, "samples": 3})
+	if rr.Code != 202 || resp["jobs"].(float64) != 3 {
+		t.Fatalf("fresh samples=3: %d %v", rr.Code, resp)
+	}
+	waitIdle(t, s)
+	// now 3 completed; samples=3 -> nothing; samples=5 -> 2 more
+	rr, resp = doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}, "samples": 3})
+	if rr.Code != 200 || resp["jobs"].(float64) != 0 {
+		t.Fatalf("satisfied samples=3: %d %v", rr.Code, resp)
+	}
+	rr, resp = doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}, "samples": 5})
+	if rr.Code != 202 || resp["jobs"].(float64) != 2 {
+		t.Fatalf("top-up to 5: %d %v", rr.Code, resp)
+	}
+	waitIdle(t, s)
+	// force + samples=2 -> exactly 2 more regardless of history
+	rr, resp = doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}, "samples": 2, "force": true})
+	if rr.Code != 202 || resp["jobs"].(float64) != 2 {
+		t.Fatalf("force samples=2: %d %v", rr.Code, resp)
+	}
+	waitIdle(t, s)
+
+	// matrix aggregation reflects all 7 samples
+	_, matrix := doJSON(t, s, "GET", "/api/runs", nil)
+	agg := matrix["agg"].(map[string]any)["tetris"].(map[string]any)["model-a"].(map[string]any)
+	if agg["samples"].(float64) != 7 || agg["dones"].(float64) != 7 {
+		t.Fatalf("agg: %v", agg)
+	}
+}
+
 func TestResumableBatchLifecycle(t *testing.T) {
 	s, _, _ := newTestServer(t, "ok")
 	// no state file yet

@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowchart Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            background: #f5f5f5;
+        }
+        #toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+        }
+        #toolbar button {
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        #toolbar button:hover {
+            background: #eee;
+        }
+        #toolbar button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #palette {
+            position: absolute;
+            left: 10px;
+            top: 70px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        #palette h4 {
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .palette-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            cursor: grab;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .palette-item:hover {
+            background: #f0f0f0;
+        }
+        .palette-item.dragging {
+            opacity: 0.5;
+        }
+        .palette-shape {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #333;
+        }
+        .palette-rect {
+            background: #fff;
+        }
+        .palette-diamond {
+            background: #fff;
+            transform: rotate(45deg);
+            width: 18px;
+            height: 18px;
+        }
+        .palette-ellipse {
+            background: #fff;
+            border-radius: 50%;
+        }
+        #canvas-container {
+            position: absolute;
+            left: 0;
+            top: 50px;
+            right: 0;
+            bottom: 0;
+            overflow: hidden;
+        }
+        #canvas-container svg {
+            display: block;
+        }
+        .node {
+            cursor: move;
+        }
+        .node .shape {
+            fill: #fff;
+            stroke: #333;
+            stroke-width: 2;
+        }
+        .node.selected .shape {
+            stroke: #0066cc;
+            stroke-width: 3;
+            stroke-dasharray: 5,3;
+        }
+        .node .label {
+            font-size: 12px;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .anchor {
+            fill: #0066cc;
+            cursor: crosshair;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .node:hover .anchor,
+        .node.selected .anchor {
+            opacity: 1;
+        }
+        .connector {
+            fill: none;
+            stroke: #333;
+            stroke-width: 2;
+            cursor: pointer;
+        }
+        .connector.selected {
+            stroke: #0066cc;
+            stroke-width: 3;
+            stroke-dasharray: 5,3;
+        }
+        .connector-arrow {
+            fill: #333;
+        }
+        .connector.selected + .connector-arrow,
+        .connector.selected ~ .marker-path {
+            fill: #0066cc;
+        }
+        .selection-box {
+            fill: rgba(0, 102, 204, 0.1);
+            stroke: #0066cc;
+            stroke-dasharray: 3,2;
+            pointer-events: none;
+        }
+        .temp-connector {
+            stroke: #999;
+            stroke-width: 2;
+            stroke-dasharray: 5,3;
+            fill: none;
+            pointer-events: none;
+        }
+        #inline-editor {
+            position: absolute;
+            display: none;
+            background: #fff;
+            border: 2px solid #0066cc;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            min-width: 60px;
+            max-width: 150px;
+            z-index: 1000;
+        }
+        #inline-editor textarea {
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            font-size: inherit;
+            min-width: 60px;
+            max-width: 130px;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button id="undoBtn" disabled>Undo</button>
+        <button id="redoBtn" disabled>Redo</button>
+        <span style="margin-left: 16px; color: #666;">|</span>
+        <button id="exportBtn">Export SVG</button>
+    </div>
+    <div id="palette">
+        <h4>Shapes</h4>
+        <div class="palette-item" data-shape="rectangle">
+            <div class="palette-shape palette-rect"></div>
+            <span>Process</span>
+        </div>
+        <div class="palette-item" data-shape="diamond">
+            <div class="palette-shape palette-diamond"></div>
+            <span>Decision</span>
+        </div>
+        <div class="palette-item" data-shape="ellipse">
+            <div class="palette-shape palette-ellipse"></div>
+            <span>Start/End</span>
+        </div>
+    </div>
+    <div id="canvas-container">
+        <svg id="canvas" width="100%" height="100%">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" class="connector-arrow"/>
+                </marker>
+            </defs>
+            <g id="connectors-layer"></g>
+            <g id="nodes-layer"></g>
+        </svg>
+    </div>
+    <div id="inline-editor">
+        <textarea rows="2"></textarea>
+    </div>
+
+    <script>
+        // State
+        const state = {
+            nodes: [],
+            connectors: [],
+            selectedNodes: new Set(),
+            selectedConnectors: new Set(),
+            nextNodeId: 1,
+            nextConnectorId: 1,
+            history: [],
+            historyIndex: -1,
+            maxHistory: 50,
+            dragMode: null,
+            dragTarget: null,
+            dragOffset: { x: 0, y: 0 },
+            anchorDrag: null,
+            selectionStart: null,
+            selectionBox: null
+        };
+
+        // DOM elements
+        const svg = document.getElementById('canvas');
+        const nodesLayer = document.getElementById('nodes-layer');
+        const connectorsLayer = document.getElementById('connectors-layer');
+        const inlineEditor = document.getElementById('inline-editor');
+        const textarea = inlineEditor.querySelector('textarea');
+
+        // Constants
+        const ANCHOR_SIZE = 6;
+        const MIN_SIZE = { width: 60, height: 40 };
+        const PADDING = 8;
+
+        // Initialize
+        function init() {
+            setupToolbar();
+            setupPalette();
+            setupCanvas();
+            setupKeyboard();
+            loadDemo();
+            saveState();
+        }
+
+        // Toolbar
+        function setupToolbar() {
+            document.getElementById('undoBtn').onclick = undo;
+            document.getElementById('redoBtn').onclick = redo;
+            document.getElementById('exportBtn').onclick = exportSVG;
+        }
+
+        function updateToolbar() {
+            document.getElementById('undoBtn').disabled = state.historyIndex <= 0;
+            document.getElementById('redoBtn').disabled = state.historyIndex >= state.history.length - 1;
+        }
+
+        // Palette
+        function setupPalette() {
+            const items = document.querySelectorAll('.palette-item');
+            items.forEach(item => {
+                item.addEventListener('click', () => {
+                    state.pendingShape = item.dataset.shape;
+                });
+                item.addEventListener('dragstart', (e) => {
+                    state.pendingShape = item.dataset.shape;
+                    item.classList.add('dragging');
+                });
+                item.addEventListener('dragend', () => {
+                    item.classList.remove('dragging');
+                });
+            });
+        }
+
+        // Canvas
+        function setupCanvas() {
+            svg.addEventListener('click', onCanvasClick);
+            svg.addEventListener('dblclick', onCanvasDblClick);
+            svg.addEventListener('mousedown', onCanvasMouseDown);
+            svg.addEventListener('mousemove', onCanvasMouseMove);
+            svg.addEventListener('mouseup', onCanvasMouseUp);
+            svg.addEventListener('dragover', (e) => e.preventDefault());
+            svg.addEventListener('drop', onCanvasDrop);
+        }
+
+        function onCanvasClick(e) {
+            if (e.target === svg || e.target.closest('#connectors-layer')) {
+                if (!e.shiftKey) {
+                    clearSelection();
+                }
+            }
+        }
+
+        function onCanvasDblClick(e) {
+            const nodeEl = e.target.closest('.node');
+            if (nodeEl) {
+                const node = state.nodes.find(n => n.id === nodeEl.dataset.id);
+                if (node) {
+                    startInlineEdit(node, nodeEl);
+                }
+            }
+        }
+
+        function onCanvasMouseDown(e) {
+            if (e.target === svg || e.target.closest('#nodes-layer') === null) {
+                if (e.button === 0) {
+                    state.selectionStart = { x: e.clientX, y: e.clientY };
+                    state.selectionBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    state.selectionBox.setAttribute('class', 'selection-box');
+                    nodesLayer.appendChild(state.selectionBox);
+                }
+            }
+        }
+
+        function onCanvasMouseMove(e) {
+            if (state.dragMode === 'node' && state.dragTarget) {
+                const node = state.dragTarget;
+                const container = svg.getBoundingClientRect();
+                const newX = e.clientX - container.left - state.dragOffset.x;
+                const newY = e.clientY - container.top - state.dragOffset.y;
+                moveNode(node, newX, newY);
+            } else if (state.anchorDrag) {
+                const tempPath = document.querySelector('.temp-connector');
+                if (tempPath) {
+                    const container = svg.getBoundingClientRect();
+                    tempPath.setAttribute('d', `M${state.anchorDrag.x1} ${state.anchorDrag.y1} L${e.clientX - container.left} ${e.clientY - container.top}`);
+                }
+            } else if (state.selectionStart) {
+                const container = svg.getBoundingClientRect();
+                const x = Math.min(state.selectionStart.x - container.left, e.clientX - container.left);
+                const y = Math.min(state.selectionStart.y - container.top, e.clientY - container.top);
+                const w = Math.abs(e.clientX - state.selectionStart.x);
+                const h = Math.abs(e.clientY - state.selectionStart.y);
+                state.selectionBox.setAttribute('x', x);
+                state.selectionBox.setAttribute('y', y);
+                state.selectionBox.setAttribute('width', w);
+                state.selectionBox.setAttribute('height', h);
+            }
+        }
+
+        function onCanvasMouseUp(e) {
+            if (state.dragMode === 'node') {
+                saveState();
+            }
+            if (state.anchorDrag) {
+                const container = svg.getBoundingClientRect();
+                const x = e.clientX - container.left;
+                const y = e.clientY - container.top;
+                const anchorEl = document.elementFromPoint(e.clientX, e.clientY);
+                if (anchorEl && anchorEl.classList.contains('anchor')) {
+                    const targetNodeEl = anchorEl.closest('.node');
+                    if (targetNodeEl && targetNodeEl.dataset.id !== state.anchorDrag.nodeId) {
+                        const targetNode = state.nodes.find(n => n.id === targetNodeEl.dataset.id);
+                        createConnector(state.anchorDrag.nodeId, state.anchorDrag.anchor, targetNode.id, getAnchorFromElement(anchorEl));
+                    }
+                }
+                document.querySelector('.temp-connector')?.remove();
+                state.anchorDrag = null;
+                saveState();
+            }
+            if (state.selectionStart) {
+                if (state.selectionBox) {
+                    const box = state.selectionBox.getBoundingClientRect();
+                    const container = svg.getBoundingClientRect();
+                    const nodes = document.querySelectorAll('.node');
+                    nodes.forEach(nodeEl => {
+                        const rect = nodeEl.getBoundingClientRect();
+                        if (rect.left >= box.left && rect.right <= box.right &&
+                            rect.top >= box.top && rect.bottom <= box.bottom) {
+                            if (!e.shiftKey) {
+                                clearSelection();
+                            }
+                            selectNode(state.nodes.find(n => n.id === nodeEl.dataset.id));
+                        }
+                    });
+                    state.selectionBox.remove();
+                    state.selectionBox = null;
+                }
+                state.selectionStart = null;
+            }
+            state.dragMode = null;
+            state.dragTarget = null;
+        }
+
+        function onCanvasDrop(e) {
+            e.preventDefault();
+            if (state.pendingShape) {
+                const container = svg.getBoundingClientRect();
+                const x = e.clientX - container.left;
+                const y = e.clientY - container.top;
+                createNode(state.pendingShape, x, y);
+                state.pendingShape = null;
+                saveState();
+            }
+        }
+
+        // Keyboard
+        function setupKeyboard() {
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key === 'z') {
+                        e.preventDefault();
+                        undo();
+                    } else if (e.key === 'y') {
+                        e.preventDefault();
+                        redo();
+                    }
+                } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                    if (document.activeElement !== textarea) {
+                        deleteSelection();
+                    }
+                } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
+                          e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const delta = e.shiftKey ? 10 : 1;
+                    let dx = 0, dy = 0;
+                    if (e.key === 'ArrowUp') dy = -delta;
+                    else if (e.key === 'ArrowDown') dy = delta;
+                    else if (e.key === 'ArrowLeft') dx = -delta;
+                    else if (e.key === 'ArrowRight') dx = delta;
+                    nudgeSelection(dx, dy);
+                }
+            });
+        }
+
+        // Node operations
+        function createNode(shape, x, y) {
+            const node = {
+                id: state.nextNodeId++,
+                shape: shape,
+                x: x - 50,
+                y: y - 20,
+                width: 100,
+                height: 40,
+                text: shape === 'rectangle' ? 'Process' : 
+                      shape === 'diamond' ? 'Decision?' : 'Start',
+                anchors: { top: true, bottom: true, left: true, right: true }
+            };
+            if (shape === 'diamond') {
+                node.width = 80;
+                node.height = 80;
+            } else if (shape === 'ellipse') {
+                node.width = 80;
+                node.height = 50;
+            }
+            state.nodes.push(node);
+            renderNode(node);
+            return node;
+        }
+
+        function renderNode(node) {
+            let shapeEl = nodesLayer.querySelector(`[data-id="${node.id}"]`);
+            if (!shapeEl) {
+                shapeEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                shapeEl.setAttribute('class', 'node');
+                shapeEl.setAttribute('data-id', node.id);
+                nodesLayer.appendChild(shapeEl);
+            }
+            shapeEl.innerHTML = '';
+            
+            let shape;
+            if (node.shape === 'rectangle') {
+                shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                shape.setAttribute('x', node.x);
+                shape.setAttribute('y', node.y);
+                shape.setAttribute('width', node.width);
+                shape.setAttribute('height', node.height);
+                shape.setAttribute('rx', 4);
+            } else if (node.shape === 'diamond') {
+                shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                const cx = node.x + node.width / 2;
+                const cy = node.y + node.height / 2;
+                shape.setAttribute('points', `${cx},${node.y} ${node.x + node.width},${cy} ${cx},${node.y + node.height} ${node.x},${cy}`);
+            } else if (node.shape === 'ellipse') {
+                shape = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+                shape.setAttribute('cx', node.x + node.width / 2);
+                shape.setAttribute('cy', node.y + node.height / 2);
+                shape.setAttribute('rx', node.width / 2);
+                shape.setAttribute('ry', node.height / 2);
+            }
+            shape.setAttribute('class', 'shape');
+            shapeEl.appendChild(shape);
+
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('class', 'label');
+            const cx = node.x + node.width / 2;
+            const cy = node.y + node.height / 2;
+            label.setAttribute('x', cx);
+            label.setAttribute('y', cy);
+            label.textContent = node.text;
+            shapeEl.appendChild(label);
+
+            // Anchors
+            const anchorPositions = [
+                { name: 'top', x: node.x + node.width / 2, y: node.y },
+                { name: 'bottom', x: node.x + node.width / 2, y: node.y + node.height },
+                { name: 'left', x: node.x, y: node.y + node.height / 2 },
+                { name: 'right', x: node.x + node.width, y: node.y + node.height / 2 }
+            ];
+            anchorPositions.forEach(pos => {
+                const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                anchor.setAttribute('class', 'anchor');
+                anchor.setAttribute('cx', pos.x);
+                anchor.setAttribute('cy', pos.y);
+                anchor.setAttribute('r', ANCHOR_SIZE);
+                anchor.dataset.anchor = pos.name;
+                anchor.dataset.nodeId = node.id;
+                anchor.addEventListener('mousedown', (e) => onAnchorMouseDown(e, node.id, pos.name));
+                shapeEl.appendChild(anchor);
+            });
+
+            shapeEl.addEventListener('mousedown', (e) => onNodeMouseDown(e, node));
+            shapeEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (e.shiftKey) {
+                    toggleNodeSelection(node);
+                } else {
+                    selectNode(node);
+                }
+            });
+        }
+
+        function moveNode(node, x, y) {
+            node.x = x;
+            node.y = y;
+            renderNode(node);
+            renderConnectors();
+        }
+
+        function selectNode(node) {
+            clearSelection();
+            state.selectedNodes.add(node.id);
+            const el = nodesLayer.querySelector(`[data-id="${node.id}"]`);
+            if (el) el.classList.add('selected');
+        }
+
+        function toggleNodeSelection(node) {
+            if (state.selectedNodes.has(node.id)) {
+                state.selectedNodes.delete(node.id);
+                const el = nodesLayer.querySelector(`[data-id="${node.id}"]`);
+                if (el) el.classList.remove('selected');
+            } else {
+                state.selectedNodes.add(node.id);
+                const el = nodesLayer.querySelector(`[data-id="${node.id}"]`);
+                if (el) el.classList.add('selected');
+            }
+        }
+
+        function clearSelection() {
+            state.selectedNodes.clear();
+            state.selectedConnectors.clear();
+            document.querySelectorAll('.node.selected').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.connector.selected').forEach(el => el.classList.remove('selected'));
+        }
+
+        // Anchor and connector operations
+        function onAnchorMouseDown(e, nodeId, anchorName) {
+            e.stopPropagation();
+            e.preventDefault();
+            const anchorEl = e.target;
+            state.anchorDrag = {
+                nodeId: nodeId,
+                anchor: anchorName,
+                x1: parseFloat(anchorEl.getAttribute('cx')),
+                y1: parseFloat(anchorEl.getAttribute('cy'))
+            };
+            state.dragMode = 'anchor';
+            const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            tempPath.setAttribute('class', 'temp-connector');
+            connectorsLayer.appendChild(tempPath);
+        }
+
+        function getAnchorFromElement(el) {
+            return el.dataset.anchor;
+        }
+
+        function createConnector(sourceId, sourceAnchor, targetId, targetAnchor) {
+            const connector = {
+                id: state.nextConnectorId++,
+                sourceId: sourceId,
+                sourceAnchor: sourceAnchor,
+                targetId: targetId,
+                targetAnchor: targetAnchor
+            };
+            state.connectors.push(connector);
+            renderConnectors();
+            return connector;
+        }
+
+        function renderConnectors() {
+            connectorsLayer.innerHTML = '';
+            state.connectors.forEach(connector => {
+                renderConnector(connector);
+            });
+        }
+
+        function renderConnector(connector) {
+            const sourceNode = state.nodes.find(n => n.id === connector.sourceId);
+            const targetNode = state.nodes.find(n => n.id === connector.targetId);
+            if (!sourceNode || !targetNode) return;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('class', 'connector');
+            path.setAttribute('data-id', connector.id);
+            path.setAttribute('marker-end', 'url(#arrowhead)');
+            path.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (e.shiftKey) {
+                    toggleConnectorSelection(connector);
+                } else {
+                    selectConnector(connector);
+                }
+            });
+            connectorsLayer.appendChild(path);
+
+            const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            arrow.setAttribute('class', 'marker-path');
+            connectorsLayer.appendChild(arrow);
+
+            updateConnectorPath(connector, path, arrow);
+        }
+
+        function updateConnectorPath(connector, pathEl, arrowEl) {
+            const sourceNode = state.nodes.find(n => n.id === connector.sourceId);
+            const targetNode = state.nodes.find(n => n.id === connector.targetId);
+            if (!sourceNode || !targetNode) return;
+
+            const start = getAnchorPoint(sourceNode, connector.sourceAnchor);
+            const end = getAnchorPoint(targetNode, connector.targetAnchor);
+            
+            const path = calculateOrthogonalPath(start, end, sourceNode, targetNode, connector.sourceAnchor, connector.targetAnchor);
+            pathEl.setAttribute('d', path);
+
+            const arrowPath = calculateArrowPath(path);
+            arrowEl.setAttribute('d', arrowPath);
+        }
+
+        function getAnchorPoint(node, anchor) {
+            switch (anchor) {
+                case 'top': return { x: node.x + node.width / 2, y: node.y };
+                case 'bottom': return { x: node.x + node.width / 2, y: node.y + node.height };
+                case 'left': return { x: node.x, y: node.y + node.height / 2 };
+                case 'right': return { x: node.x + node.width, y: node.y + node.height / 2 };
+            }
+        }
+
+        function calculateOrthogonalPath(start, end, sourceNode, targetNode, sourceAnchor, targetAnchor) {
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
+
+            let path = `M${start.x} ${start.y}`;
+
+            if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
+                path += ` V${midY}`;
+            } else {
+                path += ` H${midX}`;
+            }
+
+            if (targetAnchor === 'top' || targetAnchor === 'bottom') {
+                path += ` V${end.y}`;
+            } else {
+                path += ` H${end.x}`;
+            }
+
+            return path;
+        }
+
+        function calculateArrowPath(pathStr) {
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathStr);
+            const len = path.getTotalLength();
+            const point = path.getPointAtLength(len - 5);
+            const point2 = path.getPointAtLength(len - 15);
+            const angle = Math.atan2(point.y - point2.y, point.x - point2.x) * 180 / Math.PI;
+            
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            marker.setAttribute('transform', `translate(${point.x}, ${point.y}) rotate(${angle})`);
+            marker.innerHTML = '<polygon points="0,0 -8,-4 -8,4" class="connector-arrow"/>';
+            return marker;
+        }
+
+        function selectConnector(connector) {
+            clearSelection();
+            state.selectedConnectors.add(connector.id);
+            const el = connectorsLayer.querySelector(`[data-id="${connector.id}"]`);
+            if (el) el.classList.add('selected');
+        }
+
+        function toggleConnectorSelection(connector) {
+            if (state.selectedConnectors.has(connector.id)) {
+                state.selectedConnectors.delete(connector.id);
+                const el = connectorsLayer.querySelector(`[data-id="${connector.id}"]`);
+                if (el) el.classList.remove('selected');
+            } else {
+                state.selectedConnectors.add(connector.id);
+                const el = connectorsLayer.querySelector(`[data-id="${connector.id}"]`);
+                if (el) el.classList.add('selected');
+            }
+        }
+
+        // Inline editing
+        function startInlineEdit(node, nodeEl) {
+            const rect = nodeEl.getBoundingClientRect();
+            inlineEditor.style.display = 'block';
+            inlineEditor.style.left = (rect.left + 10) + 'px';
+            inlineEditor.style.top = (rect.top + 10) + 'px';
+            textarea.value = node.text;
+            textarea.focus();
+            textarea.select();
+
+            const complete = () => {
+                node.text = textarea.value;
+                renderNode(node);
+                inlineEditor.style.display = 'none';
+                textarea.removeEventListener('blur', complete);
+                textarea.removeEventListener('keydown', handleEditorKeydown);
+            };
+            const handleEditorKeydown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    textarea.blur();
+                } else if (e.key === 'Escape') {
+                    textarea.value = node.text;
+                    textarea.blur();
+                }
+            };
+            textarea.addEventListener('blur', complete);
+            textarea.addEventListener('keydown', handleEditorKeydown);
+        }
+
+        // Nudge
+        function nudgeSelection(dx, dy) {
+            state.selectedNodes.forEach(id => {
+                const node = state.nodes.find(n => n.id === id);
+                if (node) moveNode(node, node.x + dx, node.y + dy);
+            });
+            saveState();
+        }
+
+        // Delete
+        function deleteSelection() {
+            const deletedNodes = new Set();
+            const deletedConnectors = new Set();
+
+            state.selectedNodes.forEach(id => {
+                state.nodes = state.nodes.filter(n => {
+                    if (n.id === id) {
+                        deletedNodes.add(id);
+                        state.connectors.forEach(c => {
+                            if (c.sourceId === id || c.targetId === id) {
+                                deletedConnectors.add(c.id);
+                            }
+                        });
+                        return false;
+                    }
+                    return true;
+                });
+                const el = nodesLayer.querySelector(`[data-id="${id}"]`);
+                if (el) el.remove();
+            });
+
+            state.connectors = state.connectors.filter(c => {
+                if (deletedConnectors.has(c.id)) {
+                    const el = connectorsLayer.querySelector(`[data-id="${c.id}"]`);
+                    if (el) el.remove();
+                    return false;
+                }
+                return true;
+            });
+
+            state.selectedNodes.clear();
+            state.selectedConnectors.clear();
+            saveState();
+        }
+
+        // Undo/Redo
+        function saveState() {
+            state.history = state.history.slice(0, state.historyIndex + 1);
+            state.history.push({
+                nodes: JSON.parse(JSON.stringify(state.nodes)),
+                connectors: JSON.parse(JSON.stringify(state.connectors)),
+                nextNodeId: state.nextNodeId,
+                nextConnectorId: state.nextConnectorId
+            });
+            if (state.history.length > state.maxHistory) {
+                state.history.shift();
+            } else {
+                state.historyIndex++;
+            }
+            updateToolbar();
+        }
+
+        function undo() {
+            if (state.historyIndex > 0) {
+                state.historyIndex--;
+                restoreState(state.history[state.historyIndex]);
+            }
+        }
+
+        function redo() {
+            if (state.historyIndex < state.history.length - 1) {
+                state.historyIndex++;
+                restoreState(state.history[state.historyIndex]);
+            }
+        }
+
+        function restoreState(saved) {
+            nodesLayer.innerHTML = '';
+            connectorsLayer.innerHTML = '';
+            state.nodes = JSON.parse(JSON.stringify(saved.nodes));
+            state.connectors = JSON.parse(JSON.stringify(saved.connectors));
+            state.nextNodeId = saved.nextNodeId;
+            state.nextConnectorId = saved.nextConnectorId;
+            state.selectedNodes.clear();
+            state.selectedConnectors.clear();
+            state.nodes.forEach(renderNode);
+            renderConnectors();
+            updateToolbar();
+        }
+
+        // Export
+        function exportSVG() {
+            const svgClone = svg.cloneNode(true);
+            svgClone.removeAttribute('width');
+            svgClone.removeAttribute('height');
+            svgClone.setAttribute('viewBox', '0 0 ' + svg.clientWidth + ' ' + svg.clientHeight);
+            svgClone.querySelectorAll('.selection-box').forEach(el => el.remove());
+            
+            const svgContent = new XMLSerializer().serializeToString(svgClone);
+            const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'flowchart.svg';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Demo
+        function loadDemo() {
+            const nodes = [
+                { id: 1, shape: 'ellipse', x: 250, y: 20, width: 80, height: 50, text: 'Start' },
+                { id: 2, shape: 'rectangle', x: 230, y: 100, width: 120, height: 50, text: 'Initialize' },
+                { id: 3, shape: 'diamond', x: 240, y: 200, width: 100, height: 100, text: 'Condition?' },
+                { id: 4, shape: 'rectangle', x: 80, y: 350, width: 100, height: 50, text: 'Yes Path' },
+                { id: 5, shape: 'rectangle', x: 420, y: 350, width: 100, height: 50, text: 'No Path' },
+                { id: 6, shape: 'ellipse', x: 230, y: 500, width: 80, height: 50, text: 'End' }
+            ];
+            const connectors = [
+                { sourceId: 1, sourceAnchor: 'bottom', targetId: 2, targetAnchor: 'top' },
+                { sourceId: 2, sourceAnchor: 'bottom', targetId: 3, targetAnchor: 'top' },
+                { sourceId: 3, sourceAnchor: 'left', targetId: 4, targetAnchor: 'top' },
+                { sourceId: 3, sourceAnchor: 'right', targetId: 5, targetAnchor: 'top' },
+                { sourceId: 4, sourceAnchor: 'bottom', targetId: 6, targetAnchor: 'top' },
+                { sourceId: 5, sourceAnchor: 'bottom', targetId: 6, targetAnchor: 'top' }
+            ];
+
+            state.nodes = [];
+            state.connectors = [];
+            nodes.forEach(n => {
+                const node = { ...n, id: state.nextNodeId++ };
+                state.nodes.push(node);
+                renderNode(node);
+            });
+            connectors.forEach(c => {
+                const conn = { ...c, id: state.nextConnectorId++ };
+                state.connectors.push(conn);
+            });
+            renderConnectors();
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>

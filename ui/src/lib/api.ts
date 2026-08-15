@@ -60,11 +60,12 @@ export function startRuns(
   models: string[],
   tasks: string[],
   force = false,
+  samples = 1,
 ): Promise<{ jobs: number; skipped: number }> {
   return request("/api/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ models, tasks, force }),
+    body: JSON.stringify({ models, tasks, force, samples }),
   });
 }
 

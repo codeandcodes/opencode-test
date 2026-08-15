@@ -75,8 +75,19 @@ export interface Active {
   total: number;
 }
 
+export interface CellAgg {
+  samples: number;
+  passes: number;
+  fails: number;
+  dones: number;
+  verdict_good: number;
+  verdict_bad: number;
+  median_tps: number;
+}
+
 export interface MatrixResponse {
   matrix: Matrix;
+  agg?: Record<string, Record<string, CellAgg>>;
   active: Active;
 }
 

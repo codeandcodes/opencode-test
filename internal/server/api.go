@@ -141,9 +141,11 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Models []string `json:"models"`
 		Tasks  []string `json:"tasks"`
-		// Force re-runs cells that already have a completed result; by
-		// default those are skipped so batches are incremental.
-		Force bool `json:"force"`
+		// Force queues exactly Samples new runs per cell regardless of
+		// history; without it, cells are topped up to Samples completed
+		// measurements (default 1, i.e. skip already-completed cells).
+		Force   bool `json:"force"`
+		Samples int  `json:"samples"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -182,14 +184,32 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 		}
 		selected = append(selected, t)
 	}
-	jobs := runner.Pairs(req.Models, selected)
+	if req.Samples <= 0 {
+		req.Samples = 1
+	}
+	if req.Samples > 10 {
+		writeErr(w, http.StatusBadRequest, errors.New("samples must be <= 10"))
+		return
+	}
+	pairs := runner.Pairs(req.Models, selected)
+	var jobs []runner.JobSpec
 	skipped := 0
-	if !req.Force {
-		var err error
-		jobs, skipped, err = s.filterCompleted(jobs)
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
+	for _, j := range pairs {
+		want := req.Samples
+		if !req.Force {
+			completed, err := s.completedCount(j)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+			want -= completed
+		}
+		if want <= 0 {
+			skipped++
+			continue
+		}
+		for range want {
+			jobs = append(jobs, j)
 		}
 	}
 	if len(jobs) == 0 {
@@ -246,24 +266,33 @@ func (s *Server) handleActiveTail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// completedCount reports how many completed measurements (done/pass/fail)
+// a cell's history holds.
+func (s *Server) completedCount(j runner.JobSpec) (int, error) {
+	history, err := s.cfg.Store.History(j.Task.ID, j.Model)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, res := range history {
+		if res.Status == "done" || res.Status == "pass" || res.Status == "fail" {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // filterCompleted drops jobs whose cell already holds a completed
 // measurement (done/pass/fail) anywhere in its history.
 func (s *Server) filterCompleted(jobs []runner.JobSpec) ([]runner.JobSpec, int, error) {
 	kept := jobs[:0]
 	skipped := 0
 	for _, j := range jobs {
-		history, err := s.cfg.Store.History(j.Task.ID, j.Model)
+		completed, err := s.completedCount(j)
 		if err != nil {
 			return nil, 0, err
 		}
-		completed := false
-		for _, res := range history {
-			if res.Status == "done" || res.Status == "pass" || res.Status == "fail" {
-				completed = true
-				break
-			}
-		}
-		if completed {
+		if completed > 0 {
 			skipped++
 			continue
 		}
@@ -374,9 +403,19 @@ func (s *Server) handleMatrix(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	agg := map[string]map[string]store.CellAgg{}
+	for taskID, byModel := range m {
+		agg[taskID] = map[string]store.CellAgg{}
+		for model := range byModel {
+			if history, err := s.cfg.Store.History(taskID, model); err == nil {
+				agg[taskID][model] = store.Aggregate(history)
+			}
+		}
+	}
 	running, cur, done, total := s.cfg.Runner.Active()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"matrix": m,
+		"agg":    agg,
 		"active": map[string]any{
 			"running": running, "task": cur.Task, "model": cur.Model,
 			"done": done, "total": total,

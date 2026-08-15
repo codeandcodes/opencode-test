@@ -71,6 +71,56 @@ func TestHistoryNewestFirst(t *testing.T) {
 	}
 }
 
+func TestNewRunDirCollisionSafe(t *testing.T) {
+	st := New(t.TempDir())
+	refs := map[string]bool{}
+	for i := 0; i < 3; i++ { // same second: must yield distinct dirs
+		ref, _, err := st.NewRunDir("tetris", "m")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if refs[ref.Timestamp] {
+			t.Fatalf("duplicate timestamp %q", ref.Timestamp)
+		}
+		refs[ref.Timestamp] = true
+		st.WriteResult(ref, Result{Status: "done", Timestamp: ref.Timestamp})
+	}
+	h, err := st.History("tetris", "m")
+	if err != nil || len(h) != 3 {
+		t.Fatalf("history = %d (%v), want 3", len(h), err)
+	}
+}
+
+func TestAggregate(t *testing.T) {
+	now := time.Now()
+	h := []Result{
+		{Status: "pass", GenSeconds: 10, TokensOut: 500, FinishedAt: now},
+		{Status: "fail", GenSeconds: 10, TokensOut: 800, FinishedAt: now},
+		{Status: "pass", GenSeconds: 20, TokensOut: 400, FinishedAt: now},
+		{Status: "error", FinishedAt: now}, // not a sample
+		{Status: "done", FinishedAt: now, Verdict: &Verdict{Verdict: "good"}},
+		{Status: "done", FinishedAt: now, Verdict: &Verdict{Verdict: "bad"}},
+		{Status: "done", FinishedAt: now},
+	}
+	agg := Aggregate(h)
+	if agg.Samples != 6 { // pass+fail+pass+done×3
+		t.Fatalf("samples = %d", agg.Samples)
+	}
+	if agg.Passes != 2 || agg.Fails != 1 || agg.Dones != 3 {
+		t.Fatalf("counts: %+v", agg)
+	}
+	if agg.VerdictGood != 1 || agg.VerdictBad != 1 {
+		t.Fatalf("verdicts: %+v", agg)
+	}
+	// tps samples: 50, 80, 20 -> median 50
+	if agg.MedianTps < 49.9 || agg.MedianTps > 50.1 {
+		t.Fatalf("median tps = %v", agg.MedianTps)
+	}
+	if empty := Aggregate(nil); empty.Samples != 0 || empty.MedianTps != 0 {
+		t.Fatalf("empty agg: %+v", empty)
+	}
+}
+
 func TestVerdicts(t *testing.T) {
 	st := New(t.TempDir())
 	ref, _, _ := st.NewRunDir("tetris", "m")

@@ -14,10 +14,27 @@
   import StatusChip from "./StatusChip.svelte";
   import type {
     Active,
+    CellAgg,
     Matrix as MatrixData,
     Model,
     TaskSummary,
   } from "./types";
+
+  function aggLine(a: CellAgg | undefined, type: string): string {
+    if (!a || a.samples < 2) return "";
+    const parts = [`n=${a.samples}`];
+    if (type === "check") {
+      parts.push(`${a.passes}✓ ${a.fails}✗`);
+    } else if (a.verdict_good + a.verdict_bad > 0) {
+      const v: string[] = [];
+      if (a.verdict_good) v.push(`👍${a.verdict_good}`);
+      if (a.verdict_bad) v.push(`👎${a.verdict_bad}`);
+      parts.push(v.join(" "));
+    }
+    if (a.median_tps > 0)
+      parts.push(`~${a.median_tps >= 100 ? Math.round(a.median_tps) : a.median_tps.toFixed(1)} t/s`);
+    return parts.join(" · ");
+  }
 
   let { refresh = 0 }: { refresh?: number } = $props();
 
@@ -25,6 +42,7 @@
   let tasks = $state<TaskSummary[]>([]);
   let warnings = $state<string[]>([]);
   let matrix = $state<MatrixData>({});
+  let agg = $state<Record<string, Record<string, CellAgg>>>({});
   let active = $state<Active>({
     running: false,
     task: "",
@@ -48,6 +66,7 @@
       tasks = t.tasks;
       warnings = t.warnings ?? [];
       matrix = mx.matrix ?? {};
+      agg = mx.agg ?? {};
       active = mx.active;
       resumable = res;
       error = "";
@@ -194,6 +213,11 @@
                         <span class="dur">{fmtDuration(r.duration_sec)}</span>
                         {#if fmtCheckScore(r)}
                           <span class="checkscore">{fmtCheckScore(r)}</span>
+                        {/if}
+                        {#if aggLine(agg[t.id]?.[m.id], t.type)}
+                          <span class="substats">
+                            {aggLine(agg[t.id]?.[m.id], t.type)}
+                          </span>
                         {/if}
                         {#if genTokens(r) > 0}
                           <span

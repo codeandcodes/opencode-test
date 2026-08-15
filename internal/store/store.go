@@ -35,8 +35,8 @@ type Result struct {
 	GenSeconds float64 `json:"gen_seconds"`
 	// LoadSeconds is the first-token wait: model swap/load + initial prefill.
 	LoadSeconds float64 `json:"load_seconds,omitempty"`
-	Error      string  `json:"error,omitempty"`
-	Timestamp  string  `json:"timestamp"`
+	Error       string  `json:"error,omitempty"`
+	Timestamp   string  `json:"timestamp"`
 	// PromptSHA is the sha256 of the task prompt this run executed.
 	PromptSHA string `json:"prompt_sha,omitempty"`
 	// CheckPassed/CheckFailed are assertion counts parsed from check.log;
@@ -83,14 +83,33 @@ func New(root string) *Store { return &Store{root: root} }
 const tsLayout = "2006-01-02T15-04-05Z"
 
 // NewRunDir creates runs/<task>/<model>/<ts>/workspace and returns the ref
-// and the absolute workspace path.
+// and the absolute workspace path. Timestamps have second resolution, so a
+// numeric suffix disambiguates same-second runs (suffixes sort after the
+// bare name, preserving chronological ordering).
 func (s *Store) NewRunDir(task, model string) (RunRef, string, error) {
-	ref := RunRef{Task: task, Model: model, Timestamp: time.Now().UTC().Format(tsLayout)}
-	ws := filepath.Join(s.RunPath(ref), "workspace")
-	if err := os.MkdirAll(ws, 0o755); err != nil {
+	base := time.Now().UTC().Format(tsLayout)
+	if err := os.MkdirAll(filepath.Join(s.root, task, model), 0o755); err != nil {
 		return RunRef{}, "", err
 	}
-	return ref, ws, nil
+	for i := 0; ; i++ {
+		ts := base
+		if i > 0 {
+			ts = fmt.Sprintf("%s-%d", base, i+1)
+		}
+		ref := RunRef{Task: task, Model: model, Timestamp: ts}
+		err := os.Mkdir(s.RunPath(ref), 0o755)
+		if os.IsExist(err) {
+			continue
+		}
+		if err != nil {
+			return RunRef{}, "", err
+		}
+		ws := filepath.Join(s.RunPath(ref), "workspace")
+		if err := os.MkdirAll(ws, 0o755); err != nil {
+			return RunRef{}, "", err
+		}
+		return ref, ws, nil
+	}
 }
 
 func (s *Store) RunPath(ref RunRef) string {

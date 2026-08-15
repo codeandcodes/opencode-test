@@ -27,6 +27,7 @@
   let busy = $state(false);
   let error = $state("");
   let force = $state(false);
+  let samples = $state(1);
   let lastQueued = $state("");
 
   async function run() {
@@ -36,7 +37,7 @@
     error = "";
     lastQueued = "";
     try {
-      const res = await startRuns(ms, ts, force);
+      const res = await startRuns(ms, ts, force, samples);
       lastQueued =
         res.jobs === 0
           ? `nothing to do — ${res.skipped} cell${res.skipped === 1 ? "" : "s"} already complete (check "re-run completed" for more samples)`
@@ -102,8 +103,12 @@
       Cancel
     </button>
     <label class="force">
+      samples
+      <input class="samples" type="number" min="1" max="10" bind:value={samples} />
+    </label>
+    <label class="force">
       <input type="checkbox" bind:checked={force} />
-      re-run completed (extra samples)
+      force re-run (ignore existing)
     </label>
     {#if active.running}
       <span class="progress">
@@ -183,6 +188,18 @@
   .force {
     color: var(--muted);
     font-size: 0.82rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .samples {
+    width: 3rem;
+    font: inherit;
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.3rem;
   }
   .queued {
     color: var(--muted);
