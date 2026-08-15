@@ -270,6 +270,7 @@ func (r *Runner) runJob(ctx context.Context, j JobSpec) string {
 		res.TokensIn, res.TokensOut = stats.TokensIn, stats.TokensOut
 		res.TokensReasoning, res.CacheRead = stats.TokensReasoning, stats.CacheRead
 		res.GenSeconds = stats.GenSeconds
+		res.LoadSeconds = stats.LoadSeconds
 		r.store.WriteResult(ref, res)
 		return status
 	}

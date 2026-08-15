@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Calendar</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="calendar-container">
+    <header class="calendar-header">
+      <button id="prevBtn" class="nav-btn">&lt; Prev</button>
+      <button id="todayBtn" class="nav-btn">Today</button>
+      <h2 id="currentDateDisplay"></h2>
+      <button id="nextBtn" class="nav-btn">Next &gt;</button>
+      <div class="view-toggles">
+        <button id="monthViewBtn" class="view-btn active">Month</button>
+        <button id="weekViewBtn" class="view-btn">Week</button>
+      </div>
+    </header>
+
+    <div id="calendarGrid" class="calendar-grid"></div>
+  </div>
+
+  <div id="eventDialog" class="dialog hidden">
+    <div class="dialog-content">
+      <h3 id="dialogTitle">Edit Event</h3>
+      <form id="eventForm">
+        <div class="form-group">
+          <label for="eventTitle">Title:</label>
+          <input type="text" id="eventTitle" required>
+        </div>
+        <div class="form-group">
+          <label for="eventStart">Start:</label>
+          <input type="datetime-local" id="eventStart" required>
+        </div>
+        <div class="form-group">
+          <label for="eventEnd">End:</label>
+          <input type="datetime-local" id="eventEnd" required>
+        </div>
+        <div class="form-group">
+          <label for="eventColor">Color:</label>
+          <input type="color" id="eventColor" value="#3498db">
+        </div>
+        <div class="form-group">
+          <label for="recurrenceType">Recurrence:</label>
+          <select id="recurrenceType">
+            <option value="none">None</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div id="weeklyOptions" class="recurrence-options hidden">
+          <label>Days of week:</label>
+          <div class="weekday-checkboxes">
+            <label><input type="checkbox" value="1"> Mon</label>
+            <label><input type="checkbox" value="2"> Tue</label>
+            <label><input type="checkbox" value="3"> Wed</label>
+            <label><input type="checkbox" value="4"> Thu</label>
+            <label><input type="checkbox" value="5"> Fri</label>
+            <label><input type="checkbox" value="6"> Sat</label>
+            <label><input type="checkbox" value="0"> Sun</label>
+          </div>
+        </div>
+        <div id="monthlyOptions" class="recurrence-options hidden">
+          <label>Occurrence:</label>
+          <select id="monthlyOccurrence">
+            <option value="1">1st</option>
+            <option value="2">2nd</option>
+            <option value="3">3rd</option>
+            <option value="4">4th</option>
+          </select>
+          <label for="monthlyDay">Day of week:</label>
+          <select id="monthlyDay">
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+            <option value="0">Sunday</option>
+          </select>
+        </div>
+        <div class="form-buttons">
+          <button type="button" id="deleteEventBtn" class="delete-btn hidden">Delete</button>
+          <button type="button" id="saveEventBtn" class="save-btn">Save</button>
+          <button type="button" id="cancelEventBtn" class="cancel-btn">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deleteDialog" class="dialog hidden">
+    <div class="dialog-content">
+      <h3>Delete Event</h3>
+      <p>Do you want to delete:</p>
+      <div class="delete-options">
+        <button id="deleteThisBtn" class="delete-option-btn">This occurrence only</button>
+        <button id="deleteAllBtn" class="delete-option-btn">The whole series</button>
+      </div>
+      <button id="cancelDeleteBtn" class="cancel-btn">Cancel</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

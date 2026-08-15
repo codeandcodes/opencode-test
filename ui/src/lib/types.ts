@@ -34,8 +34,10 @@ export interface Result {
   tokens_out: number;
   tokens_reasoning: number;
   cache_read: number;
-  /** active generation seconds (text+reasoning windows), 0 if unknown */
+  /** model-active generation seconds (excludes load and tool time) */
   gen_seconds: number;
+  /** first-token wait: model swap/load + initial prefill */
+  load_seconds?: number;
   error?: string;
   timestamp: string;
   verdict?: Verdict;

@@ -16,11 +16,14 @@ type EventStats struct {
 	TokensOut       int
 	TokensReasoning int
 	CacheRead       int
-	// GenSeconds is model-active time: the sum of step windows
-	// (step_start to step_finish) minus tool execution windows. It covers
-	// prompt processing plus generation of all parts (text, reasoning,
-	// tool arguments); the first step also includes model load.
+	// GenSeconds is model-active generation time: the sum of step windows
+	// (step_start to step_finish) minus tool execution windows and minus
+	// LoadSeconds. It covers generation of all parts plus later-step
+	// prompt processing.
 	GenSeconds float64
+	// LoadSeconds is the first-token wait: first step_start to the first
+	// part's generation start — model swap/load plus the initial prefill.
+	LoadSeconds float64
 }
 
 // ParseEvents tolerantly scans an opencode event stream. The schema (as of
@@ -38,8 +41,16 @@ func ParseEvents(path string) EventStats {
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1024*1024), 16*1024*1024)
-	var stepStart float64
+	var stepStart, firstStepStart, firstPartStart float64
 	var toolSeconds float64
+	partStart := func(part map[string]any, key string) float64 {
+		tm, ok := part[key].(map[string]any)
+		if !ok {
+			return 0
+		}
+		v, _ := tm["start"].(float64)
+		return v
+	}
 	for sc.Scan() {
 		var m map[string]any
 		if err := json.Unmarshal(sc.Bytes(), &m); err != nil {
@@ -54,11 +65,17 @@ func ParseEvents(path string) EventStats {
 			s.ToolCalls++
 			if state, ok := part["state"].(map[string]any); ok {
 				toolSeconds += windowSeconds(state["time"])
+				if v := partStart(state, "time"); v > 0 && (firstPartStart == 0 || v < firstPartStart) {
+					firstPartStart = v
+				}
 			} else {
 				toolSeconds += windowSeconds(part["time"])
 			}
 		case typ == "step_start":
 			stepStart = ts
+			if firstStepStart == 0 {
+				firstStepStart = ts
+			}
 		case typ == "step_finish":
 			s.Messages++
 			if stepStart > 0 && ts > stepStart {
@@ -73,9 +90,16 @@ func ParseEvents(path string) EventStats {
 					s.CacheRead += intAt(cache, "read")
 				}
 			}
+		default:
+			if v := partStart(part, "time"); v > 0 && (firstPartStart == 0 || v < firstPartStart) {
+				firstPartStart = v
+			}
 		}
 	}
-	s.GenSeconds -= toolSeconds
+	if firstStepStart > 0 && firstPartStart > firstStepStart {
+		s.LoadSeconds = (firstPartStart - firstStepStart) / 1000
+	}
+	s.GenSeconds -= toolSeconds + s.LoadSeconds
 	if s.GenSeconds < 0 {
 		s.GenSeconds = 0
 	}

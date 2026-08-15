@@ -30,10 +30,11 @@ type Result struct {
 	TokensReasoning int `json:"tokens_reasoning"`
 	// CacheRead counts prompt tokens served from the provider's cache.
 	CacheRead int `json:"cache_read"`
-	// GenSeconds is model-active time from the event stream: step windows
-	// minus tool execution. Includes prompt processing; the first step also
-	// includes model load.
+	// GenSeconds is model-active generation time from the event stream:
+	// step windows minus tool execution minus LoadSeconds.
 	GenSeconds float64 `json:"gen_seconds"`
+	// LoadSeconds is the first-token wait: model swap/load + initial prefill.
+	LoadSeconds float64 `json:"load_seconds,omitempty"`
 	Error      string  `json:"error,omitempty"`
 	Timestamp  string  `json:"timestamp"`
 	// PromptSHA is the sha256 of the task prompt this run executed.

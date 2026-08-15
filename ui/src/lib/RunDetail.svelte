@@ -128,6 +128,12 @@
           <span class="k">over {Math.round(result.gen_seconds)}s</span>
         {/if}
       </span>
+      {#if (result.load_seconds ?? 0) > 0.5}
+        <span class="stat">
+          <span class="k">first token</span>
+          {Math.round(result.load_seconds ?? 0)}s
+        </span>
+      {/if}
       {#if result.error}
         <span class="stat error">{result.error}</span>
       {/if}

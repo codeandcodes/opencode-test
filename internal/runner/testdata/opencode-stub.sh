@@ -16,7 +16,7 @@ done
 case "${STUB_MODE:-ok}" in
   ok)
     echo '{"type":"step_start","timestamp":1000,"part":{"type":"step-start"}}'
-    echo '{"type":"text","timestamp":1500,"part":{"type":"text","text":"writing the file","time":{"start":1000,"end":3000}}}'
+    echo '{"type":"text","timestamp":1500,"part":{"type":"text","text":"writing the file","time":{"start":1400,"end":3000}}}'
     echo '{"type":"tool","timestamp":1600,"part":{"type":"tool","tool":"write","state":{"status":"completed"}}}'
     echo '{"type":"step_finish","timestamp":2000,"part":{"type":"step-finish","reason":"stop","tokens":{"total":350,"input":100,"output":200,"reasoning":50,"cache":{"write":0,"read":40}}}}'
     [ -n "$dir" ] && echo "hello" > "$dir/hello.txt"
