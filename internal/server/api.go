@@ -53,8 +53,50 @@ func (s *Server) registerAPI() {
 	s.mux.HandleFunc("DELETE /api/runs/resumable", s.handleResumableDismiss)
 	s.mux.HandleFunc("POST /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictSet)
 	s.mux.HandleFunc("DELETE /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictClear)
+	s.mux.HandleFunc("GET /api/reviews/pending", s.handleReviewsPending)
 	s.mux.HandleFunc("GET /api/leaderboard", s.handleLeaderboard)
 	s.mux.HandleFunc("GET /api/events", s.handleSSE)
+}
+
+// handleReviewsPending lists completed review runs (status done — checks
+// never produce done) that have no verdict yet, ordered task-major so a
+// reviewer judges all models of one task consecutively.
+func (s *Server) handleReviewsPending(w http.ResponseWriter, r *http.Request) {
+	latest, err := s.cfg.Store.Latest()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	type pendingRun struct {
+		Task      string `json:"task"`
+		Model     string `json:"model"`
+		Timestamp string `json:"timestamp"`
+	}
+	out := []pendingRun{}
+	taskIDs := make([]string, 0, len(latest))
+	for taskID := range latest {
+		taskIDs = append(taskIDs, taskID)
+	}
+	sort.Strings(taskIDs)
+	for _, taskID := range taskIDs {
+		models := make([]string, 0, len(latest[taskID]))
+		for model := range latest[taskID] {
+			models = append(models, model)
+		}
+		sort.Strings(models)
+		for _, model := range models {
+			history, err := s.cfg.Store.History(taskID, model)
+			if err != nil {
+				continue
+			}
+			for _, res := range history {
+				if res.Status == "done" && res.Verdict == nil {
+					out = append(out, pendingRun{Task: taskID, Model: model, Timestamp: res.Timestamp})
+				}
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // leaderboardRow aggregates one model's standing across all task cells.

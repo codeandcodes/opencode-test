@@ -93,6 +93,10 @@ export function previewUrl(ref: RunRef, path: string): string {
   return `${runBase(ref)}/preview/${path.split("/").map(enc).join("/")}`;
 }
 
+export function getReviewsPending(): Promise<RunRef[]> {
+  return request("/api/reviews/pending");
+}
+
 export interface LeaderboardRow {
   model: string;
   check_cells: number;

@@ -398,6 +398,42 @@ func TestVerdictLifecycle(t *testing.T) {
 	}
 }
 
+func TestReviewsPending(t *testing.T) {
+	s, st, _ := newTestServer(t, "ok")
+	write := func(task, model, status, verdict string) {
+		ref, _, _ := st.NewRunDir(task, model)
+		st.WriteResult(ref, store.Result{Task: task, Model: model, Status: status, Timestamp: ref.Timestamp})
+		if verdict != "" {
+			st.WriteVerdict(ref, store.Verdict{Verdict: verdict})
+		}
+	}
+	write("tetris", "model-a", "done", "")     // pending
+	write("tetris", "model-b", "done", "good") // judged
+	write("checkers", "model-a", "done", "")   // pending
+	write("chk", "model-a", "pass", "")        // check run: never pending
+	write("kanban", "model-a", "error", "")    // not a completed review
+
+	rr, _ := doJSON(t, s, "GET", "/api/reviews/pending", nil)
+	if rr.Code != 200 {
+		t.Fatalf("code = %d", rr.Code)
+	}
+	var pending []map[string]string
+	json.Unmarshal(rr.Body.Bytes(), &pending)
+	if len(pending) != 2 {
+		t.Fatalf("pending = %v", pending)
+	}
+	seen := map[string]bool{}
+	for _, p := range pending {
+		if p["task"] == "" || p["model"] == "" || p["timestamp"] == "" {
+			t.Fatalf("incomplete entry: %v", p)
+		}
+		seen[p["task"]] = true
+	}
+	if !seen["tetris"] || !seen["checkers"] {
+		t.Fatalf("wrong tasks: %v", pending)
+	}
+}
+
 func TestLeaderboard(t *testing.T) {
 	s, st, _ := newTestServer(t, "ok")
 	write := func(task, model, status string, tps float64, verdict string) {

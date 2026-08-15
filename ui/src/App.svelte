@@ -2,6 +2,7 @@
   import Compare from "./lib/Compare.svelte";
   import Leaderboard from "./lib/Leaderboard.svelte";
   import Matrix from "./lib/Matrix.svelte";
+  import ReviewMode from "./lib/ReviewMode.svelte";
   import NewTask from "./lib/NewTask.svelte";
   import RunDetail from "./lib/RunDetail.svelte";
   import { subscribe } from "./lib/sse";
@@ -12,6 +13,7 @@
     | { page: "run"; task: string; model: string; ts: string }
     | { page: "compare" }
     | { page: "leaderboard" }
+    | { page: "review" }
     | { page: "new" };
 
   function parseRoute(h: string): Route {
@@ -29,6 +31,7 @@
     }
     if (p === "/compare") return { page: "compare" };
     if (p === "/leaderboard") return { page: "leaderboard" };
+    if (p === "/review") return { page: "review" };
     if (p === "/new") return { page: "new" };
     return { page: "matrix" };
   }
@@ -64,6 +67,7 @@
     Matrix
   </a>
   <a href="#/compare" class:current={route.page === "compare"}>Compare</a>
+  <a href="#/review" class:current={route.page === "review"}>Review</a>
   <a href="#/leaderboard" class:current={route.page === "leaderboard"}>
     Leaderboard
   </a>
@@ -86,6 +90,8 @@
     <Compare />
   {:else if route.page === "leaderboard"}
     <Leaderboard />
+  {:else if route.page === "review"}
+    <ReviewMode />
   {:else if route.page === "new"}
     <NewTask />
   {:else}
