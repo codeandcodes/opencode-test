@@ -3,6 +3,9 @@ package server
 
 import (
 	"net/http"
+
+	"opencode-bench/internal/runner"
+	"opencode-bench/internal/store"
 )
 
 // Config carries the paths and collaborators the server needs.
@@ -11,6 +14,8 @@ type Config struct {
 	TasksDir           string
 	RunsDir            string
 	OpencodeBin        string
+	Store              *store.Store
+	Runner             *runner.Runner
 }
 
 type Server struct {
@@ -24,6 +29,9 @@ func New(cfg Config) *Server {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true}`))
 	})
+	if cfg.Store != nil && cfg.Runner != nil {
+		s.registerAPI()
+	}
 	return s
 }
 

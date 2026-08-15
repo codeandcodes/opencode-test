@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"opencode-bench/internal/runner"
 	"opencode-bench/internal/server"
+	"opencode-bench/internal/store"
 )
 
 func main() {
@@ -19,11 +21,14 @@ func main() {
 	ocbin := flag.String("opencode", "opencode", "opencode binary")
 	flag.Parse()
 
+	st := store.New(*runsDir)
 	s := server.New(server.Config{
 		OpencodeConfigPath: *occfg,
 		TasksDir:           *tasksDir,
 		RunsDir:            *runsDir,
 		OpencodeBin:        *ocbin,
+		Store:              st,
+		Runner:             runner.New(*ocbin, st),
 	})
 	log.Printf("opencode-bench listening on http://%s", *listen)
 	log.Fatal(http.ListenAndServe(*listen, s.Handler()))
