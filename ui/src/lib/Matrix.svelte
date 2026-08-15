@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     dismissResumable,
+    getHistory,
     getMatrix,
     getModels,
     getResumable,
@@ -8,6 +9,7 @@
     resumeBatch,
     type ResumableBatch,
   } from "./api";
+  import type { Result } from "./types";
   import { fmtCheckScore, fmtTokens, fmtTps, genTokens } from "./fmt";
   import LivePanel from "./LivePanel.svelte";
   import RunControl from "./RunControl.svelte";
@@ -127,6 +129,74 @@
   function fmtDuration(sec: number): string {
     return `${Math.round(sec)}s`;
   }
+
+  // ---- needs-review filter ----
+  let needsReviewOnly = $state(false);
+  function needsReview(taskID: string, modelID: string): boolean {
+    const r = matrix[taskID]?.[modelID];
+    return !!r && r.status === "done" && !r.verdict;
+  }
+  const visibleGroups = $derived.by(() => {
+    if (!needsReviewOnly) return groups;
+    return groups
+      .map((g) => ({
+        category: g.category,
+        tasks: g.tasks.filter((t) => models.some((m) => needsReview(t.id, m.id))),
+      }))
+      .filter((g) => g.tasks.length > 0);
+  });
+
+  // ---- per-model summary header (mini-leaderboard) ----
+  function modelSummary(id: string): string {
+    let passCells = 0;
+    let checkCells = 0;
+    let good = 0;
+    let bad = 0;
+    for (const t of tasks) {
+      const a = agg[t.id]?.[id];
+      if (!a) continue;
+      if (t.type === "check" && a.passes + a.fails > 0) {
+        checkCells++;
+        if (a.passes > 0) passCells++;
+      }
+      good += a.verdict_good;
+      bad += a.verdict_bad;
+    }
+    const parts: string[] = [];
+    if (checkCells) parts.push(`${passCells}/${checkCells}✓`);
+    if (good) parts.push(`👍${good}`);
+    if (bad) parts.push(`👎${bad}`);
+    return parts.join(" · ");
+  }
+
+  // ---- per-cell history popover (lazy) ----
+  let hoverKey = $state("");
+  let hoverHistory = $state<Result[]>([]);
+  const historyCache = new Map<string, Result[]>();
+  async function cellEnter(taskID: string, modelID: string) {
+    const key = taskID + "|" + modelID;
+    const a = agg[taskID]?.[modelID];
+    if (!a || a.samples < 2) {
+      hoverKey = "";
+      return;
+    }
+    hoverKey = key;
+    const cached = historyCache.get(key);
+    if (cached) {
+      hoverHistory = cached;
+      return;
+    }
+    hoverHistory = [];
+    try {
+      const h = (await getHistory(taskID, modelID)).filter((r) =>
+        ["done", "pass", "fail"].includes(r.status),
+      );
+      historyCache.set(key, h);
+      if (hoverKey === key) hoverHistory = h;
+    } catch {
+      // popover is decorative; ignore fetch errors
+    }
+  }
 </script>
 
 <div class="matrix-page">
@@ -167,9 +237,20 @@
               <th title={m.id}>{m.name || m.id}</th>
             {/each}
           </tr>
+          <tr class="summary-row">
+            <th class="taskcol">
+              <label class="filter">
+                <input type="checkbox" bind:checked={needsReviewOnly} />
+                needs review
+              </label>
+            </th>
+            {#each models as m (m.id)}
+              <th>{modelSummary(m.id) || "—"}</th>
+            {/each}
+          </tr>
         </thead>
         <tbody>
-          {#each groups as group (group.category)}
+          {#each visibleGroups as group (group.category)}
             <tr class="category-row">
               <td colspan={models.length + 1}>{group.category}</td>
             </tr>
@@ -181,7 +262,28 @@
                 </td>
                 {#each models as m (m.id)}
                   {@const r = matrix[t.id]?.[m.id]}
-                  <td class="cell">
+                  <td
+                    class="cell"
+                    class:dimmed={needsReviewOnly && !needsReview(t.id, m.id)}
+                    onmouseenter={() => cellEnter(t.id, m.id)}
+                    onmouseleave={() => (hoverKey = "")}
+                  >
+                    {#if hoverKey === t.id + "|" + m.id && hoverHistory.length > 0}
+                      <div class="popover">
+                        {#each hoverHistory.slice(0, 8) as h (h.timestamp)}
+                          <div class="pop-row">
+                            <span class="pop-status pop-{h.status}">{h.status}</span>
+                            <span>{fmtTps(h)}</span>
+                            <span class="pop-ts">{h.timestamp.slice(5, 16)}</span>
+                          </div>
+                        {/each}
+                        {#if hoverHistory.length > 8}
+                          <div class="pop-row pop-more">
+                            +{hoverHistory.length - 8} more
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
                     {#if isRunning(t.id, m.id)}
                       <StatusChip status="running" running />
                     {:else if r}
@@ -340,6 +442,75 @@
   .checkscore {
     font-family: var(--mono);
     font-size: 0.72rem;
+    color: var(--muted);
+  }
+  th.taskcol,
+  td.taskcol {
+    position: sticky;
+    left: 0;
+    background: var(--bg, #111);
+    z-index: 2;
+  }
+  .summary-row th {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--muted);
+    padding-top: 0.15rem;
+    padding-bottom: 0.35rem;
+  }
+  .filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    cursor: pointer;
+  }
+  td.cell {
+    position: relative;
+  }
+  td.cell.dimmed {
+    opacity: 0.3;
+  }
+  .popover {
+    position: absolute;
+    bottom: calc(100% - 0.3rem);
+    left: 0.4rem;
+    z-index: 5;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 13rem;
+    pointer-events: none;
+  }
+  .pop-row {
+    display: flex;
+    gap: 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  .pop-status {
+    min-width: 3.2rem;
+  }
+  .pop-pass {
+    color: var(--green, #3fb950);
+  }
+  .pop-fail {
+    color: var(--red);
+  }
+  .pop-done {
+    color: var(--accent);
+  }
+  .pop-ts,
+  .pop-more {
     color: var(--muted);
   }
   .stale {
