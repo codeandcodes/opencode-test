@@ -123,6 +123,14 @@
                           encodeURIComponent(r.timestamp)}
                       >
                         <StatusChip status={r.status} />
+                        {#if r.verdict}
+                          <span
+                            class="verdict-icon"
+                            title={r.verdict.note || r.verdict.verdict}
+                          >
+                            {r.verdict.verdict === "good" ? "👍" : "👎"}
+                          </span>
+                        {/if}
                         <span class="dur">{fmtDuration(r.duration_sec)}</span>
                         {#if genTokens(r) > 0}
                           <span
@@ -210,6 +218,9 @@
     color: var(--muted);
     font-family: var(--mono);
     font-size: 0.78rem;
+  }
+  .verdict-icon {
+    font-size: 0.8rem;
   }
   .substats {
     display: block;

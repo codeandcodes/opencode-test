@@ -7,6 +7,7 @@ import type {
   RunRef,
   Task,
   TasksResponse,
+  Verdict,
 } from "./types";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -88,6 +89,22 @@ export function fileUrl(ref: RunRef, path: string): string {
 
 export function previewUrl(ref: RunRef, path: string): string {
   return `${runBase(ref)}/preview/${path.split("/").map(enc).join("/")}`;
+}
+
+export function setVerdict(
+  ref: RunRef,
+  verdict: "good" | "bad",
+  note: string,
+): Promise<Verdict> {
+  return request(`${runBase(ref)}/verdict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ verdict, note }),
+  });
+}
+
+export function clearVerdict(ref: RunRef): Promise<void> {
+  return request(`${runBase(ref)}/verdict`, { method: "DELETE" });
 }
 
 export async function getFileText(ref: RunRef, path: string): Promise<string> {

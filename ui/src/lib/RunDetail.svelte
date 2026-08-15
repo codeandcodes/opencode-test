@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getFiles, getHistory, getRun } from "./api";
+  import { clearVerdict, getFiles, getHistory, getRun, setVerdict } from "./api";
   import { fmtTokens, fmtTps } from "./fmt";
   import FileTree from "./FileTree.svelte";
   import Preview from "./Preview.svelte";
@@ -44,6 +44,32 @@
   }
 
   const result = $derived(detail?.result ?? null);
+
+  let verdictNote = $state("");
+  let verdictError = $state("");
+
+  async function judge(v: "good" | "bad") {
+    verdictError = "";
+    try {
+      const saved = await setVerdict(ref, v, verdictNote.trim());
+      if (detail) detail = { ...detail, result: { ...detail.result, verdict: saved } };
+    } catch (e) {
+      verdictError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function unjudge() {
+    verdictError = "";
+    try {
+      await clearVerdict(ref);
+      if (detail) {
+        const { verdict: _, ...rest } = detail.result;
+        detail = { ...detail, result: rest };
+      }
+    } catch (e) {
+      verdictError = e instanceof Error ? e.message : String(e);
+    }
+  }
 </script>
 
 <div class="rundetail">
@@ -99,6 +125,26 @@
       {#if result.error}
         <span class="stat error">{result.error}</span>
       {/if}
+    </div>
+
+    <div class="verdict-bar">
+      {#if result.verdict}
+        <span class="verdict verdict-{result.verdict.verdict}">
+          {result.verdict.verdict === "good" ? "👍 good" : "👎 bad"}
+        </span>
+        {#if result.verdict.note}<span class="note">{result.verdict.note}</span>{/if}
+        <button class="linkish" onclick={unjudge}>clear</button>
+      {:else}
+        <span class="k">your verdict:</span>
+        <button onclick={() => judge("good")}>👍 good</button>
+        <button onclick={() => judge("bad")}>👎 bad</button>
+        <input
+          type="text"
+          placeholder="note (optional)"
+          bind:value={verdictNote}
+        />
+      {/if}
+      {#if verdictError}<span class="error">{verdictError}</span>{/if}
     </div>
 
     {#if detail.check_log}
@@ -180,6 +226,63 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted);
+  }
+  .verdict-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.85rem;
+  }
+  .verdict-bar .k {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .verdict-bar button {
+    font: inherit;
+    padding: 0.15rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--panel-2, transparent);
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .verdict-bar button:hover {
+    border-color: var(--fg);
+  }
+  .verdict-bar button.linkish {
+    border: none;
+    background: none;
+    color: var(--muted);
+    text-decoration: underline;
+    padding: 0;
+  }
+  .verdict-bar input {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--fg);
+    min-width: 14rem;
+  }
+  .verdict {
+    font-weight: 600;
+  }
+  .verdict-good {
+    color: var(--green, #3fb950);
+  }
+  .verdict-bad {
+    color: var(--red);
+  }
+  .verdict-bar .note {
+    color: var(--muted);
+    font-style: italic;
   }
   .checklog {
     background: var(--panel);

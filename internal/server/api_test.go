@@ -182,6 +182,51 @@ func TestRunsLifecycle(t *testing.T) {
 	}
 }
 
+func TestVerdictLifecycle(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	rr, _ := doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}})
+	if rr.Code != 202 {
+		t.Fatalf("start = %d", rr.Code)
+	}
+	waitIdle(t, s)
+	_, matrix := doJSON(t, s, "GET", "/api/runs", nil)
+	ts := matrix["matrix"].(map[string]any)["tetris"].(map[string]any)["model-a"].(map[string]any)["timestamp"].(string)
+	base := "/api/runs/tetris/model-a/" + ts
+
+	rr, _ = doJSON(t, s, "POST", base+"/verdict", map[string]any{"verdict": "good", "note": "works"})
+	if rr.Code != 200 {
+		t.Fatalf("set verdict = %d %s", rr.Code, rr.Body.String())
+	}
+	_, detail := doJSON(t, s, "GET", base, nil)
+	v := detail["result"].(map[string]any)["verdict"]
+	if v == nil || v.(map[string]any)["verdict"] != "good" {
+		t.Fatalf("verdict not in detail: %v", v)
+	}
+	_, matrix = doJSON(t, s, "GET", "/api/runs", nil)
+	cell := matrix["matrix"].(map[string]any)["tetris"].(map[string]any)["model-a"].(map[string]any)
+	if cell["verdict"] == nil {
+		t.Fatalf("verdict not in matrix cell: %v", cell)
+	}
+
+	rr, _ = doJSON(t, s, "POST", base+"/verdict", map[string]any{"verdict": "meh"})
+	if rr.Code != 400 {
+		t.Fatalf("invalid verdict = %d", rr.Code)
+	}
+	rr, _ = doJSON(t, s, "POST", "/api/runs/tetris/model-a/2020-01-01T00-00-00Z/verdict", map[string]any{"verdict": "good"})
+	if rr.Code != 404 {
+		t.Fatalf("verdict on missing run = %d", rr.Code)
+	}
+	rr, _ = doJSON(t, s, "DELETE", base+"/verdict", nil)
+	if rr.Code != 204 {
+		t.Fatalf("clear = %d", rr.Code)
+	}
+	_, detail = doJSON(t, s, "GET", base, nil)
+	if detail["result"].(map[string]any)["verdict"] != nil {
+		t.Fatal("verdict survived clear")
+	}
+}
+
 func TestRunsBusy409(t *testing.T) {
 	s, _, _ := newTestServer(t, "hang")
 	rr, _ := doJSON(t, s, "POST", "/api/runs", map[string]any{

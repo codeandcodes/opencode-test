@@ -45,7 +45,35 @@ func (s *Server) registerAPI() {
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/files", s.handleFilesList)
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/files/{path...}", s.handleFile(false))
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/preview/{path...}", s.handleFile(true))
+	s.mux.HandleFunc("POST /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictSet)
+	s.mux.HandleFunc("DELETE /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictClear)
 	s.mux.HandleFunc("GET /api/events", s.handleSSE)
+}
+
+func (s *Server) handleVerdictSet(w http.ResponseWriter, r *http.Request) {
+	ref := s.ref(r)
+	if _, err := s.cfg.Store.ReadResult(ref); err != nil {
+		writeErr(w, http.StatusNotFound, errors.New("run not found"))
+		return
+	}
+	var v store.Verdict
+	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.cfg.Store.WriteVerdict(ref, v); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+func (s *Server) handleVerdictClear(w http.ResponseWriter, r *http.Request) {
+	if err := s.cfg.Store.ClearVerdict(s.ref(r)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +221,7 @@ func (s *Server) ref(r *http.Request) store.RunRef {
 
 func (s *Server) handleRunDetail(w http.ResponseWriter, r *http.Request) {
 	ref := s.ref(r)
-	res, err := s.cfg.Store.ReadResult(ref)
+	res, err := s.cfg.Store.ReadResultFull(ref)
 	if err != nil {
 		writeErr(w, http.StatusNotFound, errors.New("run not found"))
 		return

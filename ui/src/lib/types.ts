@@ -38,6 +38,13 @@ export interface Result {
   gen_seconds: number;
   error?: string;
   timestamp: string;
+  verdict?: Verdict;
+}
+
+export interface Verdict {
+  verdict: "good" | "bad";
+  note?: string;
+  at: string;
 }
 
 /** matrix[taskID][modelID] = latest Result */

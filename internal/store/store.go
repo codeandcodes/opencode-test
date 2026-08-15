@@ -36,6 +36,16 @@ type Result struct {
 	GenSeconds float64 `json:"gen_seconds"`
 	Error      string  `json:"error,omitempty"`
 	Timestamp  string  `json:"timestamp"`
+	// Verdict is the human review judgment, stored separately in
+	// verdict.json and attached on read; never written by the runner.
+	Verdict *Verdict `json:"verdict,omitempty"`
+}
+
+// Verdict records a human judgment of a run.
+type Verdict struct {
+	Verdict string    `json:"verdict"` // good | bad
+	Note    string    `json:"note,omitempty"`
+	At      time.Time `json:"at"`
 }
 
 // RunRef identifies one run directory.
@@ -96,13 +106,53 @@ func (s *Store) ReadResult(ref RunRef) (Result, error) {
 }
 
 // resultOrInterrupted reads a run dir's result, synthesizing an
-// "interrupted" result when result.json is absent (crashed/killed server).
+// "interrupted" result when result.json is absent (crashed/killed server),
+// and attaches any stored verdict.
 func (s *Store) resultOrInterrupted(task, model, ts string) Result {
 	ref := RunRef{Task: task, Model: model, Timestamp: ts}
-	if r, err := s.ReadResult(ref); err == nil {
-		return r
+	r, err := s.ReadResult(ref)
+	if err != nil {
+		r = Result{Task: task, Model: model, Status: "interrupted", Timestamp: ts}
 	}
-	return Result{Task: task, Model: model, Status: "interrupted", Timestamp: ts}
+	if raw, err := os.ReadFile(filepath.Join(s.RunPath(ref), "verdict.json")); err == nil {
+		var v Verdict
+		if json.Unmarshal(raw, &v) == nil {
+			r.Verdict = &v
+		}
+	}
+	return r
+}
+
+// ReadResultFull reads a run's result with its verdict attached.
+func (s *Store) ReadResultFull(ref RunRef) (Result, error) {
+	if _, err := s.ReadResult(ref); err != nil {
+		return Result{}, err
+	}
+	return s.resultOrInterrupted(ref.Task, ref.Model, ref.Timestamp), nil
+}
+
+// WriteVerdict records a human judgment for a run.
+func (s *Store) WriteVerdict(ref RunRef, v Verdict) error {
+	if v.Verdict != "good" && v.Verdict != "bad" {
+		return fmt.Errorf("verdict must be good or bad, got %q", v.Verdict)
+	}
+	if v.At.IsZero() {
+		v.At = time.Now().UTC()
+	}
+	out, err := json.MarshalIndent(v, "", " ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.RunPath(ref), "verdict.json"), out, 0o644)
+}
+
+// ClearVerdict removes a run's verdict; clearing an absent verdict is a no-op.
+func (s *Store) ClearVerdict(ref RunRef) error {
+	err := os.Remove(filepath.Join(s.RunPath(ref), "verdict.json"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 // Latest returns the newest result per (task, model).

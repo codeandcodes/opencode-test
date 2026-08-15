@@ -71,6 +71,39 @@ func TestHistoryNewestFirst(t *testing.T) {
 	}
 }
 
+func TestVerdicts(t *testing.T) {
+	st := New(t.TempDir())
+	ref, _, _ := st.NewRunDir("tetris", "m")
+	st.WriteResult(ref, Result{Task: "tetris", Model: "m", Status: "done", Timestamp: ref.Timestamp})
+
+	if err := st.WriteVerdict(ref, Verdict{Verdict: "good", Note: "solid SRS"}); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := st.Latest()
+	v := m["tetris"]["m"].Verdict
+	if v == nil || v.Verdict != "good" || v.Note != "solid SRS" || v.At.IsZero() {
+		t.Fatalf("verdict not attached: %+v", v)
+	}
+	h, _ := st.History("tetris", "m")
+	if h[0].Verdict == nil {
+		t.Fatal("verdict missing from history")
+	}
+
+	if err := st.WriteVerdict(ref, Verdict{Verdict: "meh"}); err == nil {
+		t.Fatal("invalid verdict accepted")
+	}
+	if err := st.ClearVerdict(ref); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = st.Latest()
+	if m["tetris"]["m"].Verdict != nil {
+		t.Fatal("verdict not cleared")
+	}
+	if err := st.ClearVerdict(ref); err != nil {
+		t.Fatalf("clearing absent verdict should be idempotent: %v", err)
+	}
+}
+
 func TestSafePath(t *testing.T) {
 	st := New(t.TempDir())
 	ref, ws, _ := st.NewRunDir("tetris", "m")
