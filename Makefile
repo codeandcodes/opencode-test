@@ -1,4 +1,4 @@
-.PHONY: build test run ui check
+.PHONY: build test run ui check smoke
 
 build: ui
 	go build -tags ui -o opencode-bench .
@@ -18,3 +18,6 @@ check:
 	go vet ./...
 	go test ./...
 	cd ui && npx vitest run && npm run build
+
+smoke: build
+	bash scripts/smoke.sh
