@@ -42,6 +42,10 @@ export interface Result {
   prompt_sha?: string;
   /** true when the task prompt changed after this run (matrix responses only) */
   stale?: boolean;
+  /** assertion counts parsed from check.log; valid when check_parsed */
+  check_passed?: number;
+  check_failed?: number;
+  check_parsed?: boolean;
 }
 
 export interface Provenance {

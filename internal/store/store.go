@@ -38,6 +38,12 @@ type Result struct {
 	Timestamp  string  `json:"timestamp"`
 	// PromptSHA is the sha256 of the task prompt this run executed.
 	PromptSHA string `json:"prompt_sha,omitempty"`
+	// CheckPassed/CheckFailed are assertion counts parsed from check.log;
+	// meaningful only when CheckParsed is true (some formats report only
+	// failures, so CheckPassed may be 0 for a partially-parsed log).
+	CheckPassed int  `json:"check_passed,omitempty"`
+	CheckFailed int  `json:"check_failed,omitempty"`
+	CheckParsed bool `json:"check_parsed,omitempty"`
 	// Stale marks a result whose task prompt has changed since the run.
 	// Computed at serve time by the API; never persisted meaningfully.
 	Stale bool `json:"stale,omitempty"`

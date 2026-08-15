@@ -24,6 +24,16 @@ export function genTps(r: Result): number | null {
   return out / r.gen_seconds;
 }
 
+/** "9✓" | "2✗" | "8✓ 1✗" — empty string when no counts were parsed. */
+export function fmtCheckScore(r: Result): string {
+  if (!r.check_parsed) return "";
+  const parts: string[] = [];
+  if ((r.check_passed ?? 0) > 0) parts.push(`${r.check_passed}✓`);
+  if ((r.check_failed ?? 0) > 0) parts.push(`${r.check_failed}✗`);
+  if (parts.length === 0) return r.status === "pass" ? "all✓" : "";
+  return parts.join(" ");
+}
+
 export function fmtTps(r: Result): string {
   const tps = genTps(r);
   return tps === null

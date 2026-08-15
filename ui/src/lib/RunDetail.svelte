@@ -1,6 +1,6 @@
 <script lang="ts">
   import { clearVerdict, getFiles, getHistory, getRun, setVerdict } from "./api";
-  import { fmtTokens, fmtTps } from "./fmt";
+  import { fmtCheckScore, fmtTokens, fmtTps } from "./fmt";
   import FileTree from "./FileTree.svelte";
   import Preview from "./Preview.svelte";
   import StatusChip from "./StatusChip.svelte";
@@ -115,6 +115,12 @@
           (+{fmtTokens(result.tokens_reasoning)} think)
         {/if}
       </span>
+      {#if fmtCheckScore(result)}
+        <span class="stat">
+          <span class="k">assertions</span>
+          {fmtCheckScore(result)}
+        </span>
+      {/if}
       <span class="stat">
         <span class="k">gen speed</span>
         {fmtTps(result)}

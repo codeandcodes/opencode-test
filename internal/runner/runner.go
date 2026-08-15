@@ -338,7 +338,11 @@ wait:
 	if j.Task.Type != "check" {
 		return finish("done", "")
 	}
-	return finish(r.runCheck(ctx, j, ref, ws))
+	status, errMsg := r.runCheck(ctx, j, ref, ws)
+	if raw, err := os.ReadFile(filepath.Join(r.store.RunPath(ref), "check.log")); err == nil {
+		res.CheckPassed, res.CheckFailed, res.CheckParsed = ParseCheckLog(string(raw))
+	}
+	return finish(status, errMsg)
 }
 
 // runCheck executes a check script in its own process group with output

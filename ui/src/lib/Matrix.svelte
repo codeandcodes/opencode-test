@@ -8,7 +8,7 @@
     resumeBatch,
     type ResumableBatch,
   } from "./api";
-  import { fmtTokens, fmtTps, genTokens } from "./fmt";
+  import { fmtCheckScore, fmtTokens, fmtTps, genTokens } from "./fmt";
   import LivePanel from "./LivePanel.svelte";
   import RunControl from "./RunControl.svelte";
   import StatusChip from "./StatusChip.svelte";
@@ -192,6 +192,9 @@
                           </span>
                         {/if}
                         <span class="dur">{fmtDuration(r.duration_sec)}</span>
+                        {#if fmtCheckScore(r)}
+                          <span class="checkscore">{fmtCheckScore(r)}</span>
+                        {/if}
                         {#if genTokens(r) > 0}
                           <span
                             class="substats"
@@ -309,6 +312,11 @@
     font-size: 0.85rem;
     font-style: italic;
     margin: 0;
+  }
+  .checkscore {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
   }
   .stale {
     color: var(--orange, #d29922);

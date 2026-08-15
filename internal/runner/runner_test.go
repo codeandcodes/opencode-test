@@ -183,6 +183,19 @@ func TestRunCheckTaskPassAndFail(t *testing.T) {
 	}
 }
 
+func TestCheckPartialCreditRecorded(t *testing.T) {
+	r, st := newTestRunner(t, "ok")
+	task := tasks.Task{ID: "chk-partial", Title: "c", Type: "check", TimeoutMinutes: 30,
+		Prompt: "p", Check: "echo 'FAIL agg-sum'; echo '3 assertion(s) failed'; exit 1"}
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{task}))
+	drain(t, r)
+	m, _ := st.Latest()
+	res := m["chk-partial"]["m"]
+	if res.Status != "fail" || !res.CheckParsed || res.CheckFailed != 3 {
+		t.Fatalf("partial credit: %+v", res)
+	}
+}
+
 func TestRunErrorMode(t *testing.T) {
 	r, st := newTestRunner(t, "fail")
 	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")}))
