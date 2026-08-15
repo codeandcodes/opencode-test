@@ -1,0 +1,187 @@
+<script lang="ts">
+  import { getFiles, getHistory, getRun } from "./api";
+  import FileTree from "./FileTree.svelte";
+  import Preview from "./Preview.svelte";
+  import StatusChip from "./StatusChip.svelte";
+  import Transcript from "./Transcript.svelte";
+  import type { FileEntry, Result, RunDetailResponse, RunRef } from "./types";
+
+  let { task, model, ts }: { task: string; model: string; ts: string } =
+    $props();
+
+  const ref = $derived<RunRef>({ task, model, timestamp: ts });
+
+  let detail = $state<RunDetailResponse | null>(null);
+  let files = $state<FileEntry[]>([]);
+  let history = $state<Result[]>([]);
+  let error = $state("");
+
+  $effect(() => {
+    const current = ref;
+    detail = null;
+    files = [];
+    error = "";
+    (async () => {
+      try {
+        const [d, f, h] = await Promise.all([
+          getRun(current),
+          getFiles(current).catch(() => [] as FileEntry[]),
+          getHistory(current.task, current.model).catch(() => [] as Result[]),
+        ]);
+        detail = d;
+        files = f;
+        history = h;
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+    })();
+  });
+
+  function switchRun(e: Event) {
+    const sel = (e.currentTarget as HTMLSelectElement).value;
+    location.hash = `#/run/${encodeURIComponent(task)}/${encodeURIComponent(model)}/${encodeURIComponent(sel)}`;
+  }
+
+  const result = $derived(detail?.result ?? null);
+</script>
+
+<div class="rundetail">
+  <header>
+    <a class="back" href="#/">← matrix</a>
+    <h2>{task} <span class="sep">×</span> {model}</h2>
+    {#if history.length > 0}
+      <label class="history">
+        run
+        <select value={ts} onchange={switchRun}>
+          {#each history as h (h.timestamp)}
+            <option value={h.timestamp}>
+              {h.timestamp} ({h.status})
+            </option>
+          {/each}
+        </select>
+      </label>
+    {/if}
+  </header>
+
+  {#if error}
+    <p class="error">{error}</p>
+  {:else if !detail}
+    <p class="muted">Loading…</p>
+  {:else if result}
+    <div class="stats">
+      <StatusChip status={result.status} />
+      <span class="stat">
+        <span class="k">duration</span>
+        {Math.round(result.duration_sec)}s
+      </span>
+      <span class="stat"><span class="k">messages</span> {result.messages}</span>
+      <span class="stat">
+        <span class="k">tool calls</span>
+        {result.tool_calls}
+      </span>
+      <span class="stat">
+        <span class="k">tokens</span>
+        {result.tokens_in} in / {result.tokens_out} out
+      </span>
+      {#if result.error}
+        <span class="stat error">{result.error}</span>
+      {/if}
+    </div>
+
+    {#if detail.check_log}
+      <section>
+        <h3>check log</h3>
+        <pre class="checklog">{detail.check_log}</pre>
+      </section>
+    {/if}
+
+    <Preview {ref} {files} />
+
+    <section>
+      <h3>transcript</h3>
+      <Transcript events={detail.events} />
+    </section>
+
+    <section>
+      <h3>workspace</h3>
+      <FileTree {ref} {files} />
+    </section>
+  {/if}
+</div>
+
+<style>
+  .rundetail {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-family: var(--mono);
+  }
+  .sep {
+    color: var(--muted);
+  }
+  .back {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+  .back:hover {
+    color: var(--fg);
+  }
+  .history {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .stats {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.88rem;
+  }
+  .stat .k {
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-right: 0.25rem;
+  }
+  h3 {
+    margin: 0 0 0.4rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .checklog {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin: 0;
+    max-height: 20rem;
+    overflow: auto;
+    font-size: 0.8rem;
+  }
+  .error {
+    color: var(--red);
+  }
+  .muted {
+    color: var(--muted);
+  }
+</style>

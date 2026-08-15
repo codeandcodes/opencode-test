@@ -1,0 +1,37 @@
+id: calendar
+title: "Calendar with Recurrence"
+category: dates
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement an event calendar with real recurrence rules:
+  1. Month view (6-week grid, adjacent-month days dimmed) and week view
+     (7 day columns x 24 hour rows), switchable; prev/today/next
+     navigation; today visibly highlighted in both views.
+  2. Week view: drag vertically on a day column to create an event
+     spanning the dragged time range (snap to 15 minutes); drag an event
+     to move it; drag its bottom edge to resize. Month view: click a day
+     to create an all-day event.
+  3. Event dialog (create/edit): title, start, end, color, and
+     recurrence: none, weekly on a chosen set of weekdays, or monthly on
+     the nth weekday (e.g. 2nd Tuesday). Validation: end after start.
+  4. Recurrence expansion must be computed from the rule for whatever
+     window is displayed (no pre-generating a fixed list). Monthly
+     "5th weekday" rules skip months lacking one. An event recurring
+     weekly at 09:00 must render at 09:00 LOCAL time on every occurrence
+     across DST transitions — build occurrence dates from calendar
+     components (year/month/day + hour), never by adding 7x24h to a
+     timestamp. State the DST guarantee in a code comment.
+  5. Editing or deleting a recurring occurrence asks: "only this
+     occurrence" or "the whole series". Only-this-occurrence creates an
+     exception (moved or removed) stored on the series.
+  6. Overlapping events in week view share the column width side by side.
+  7. Persist everything (series, exceptions) in localStorage.
+  8. Preload demo data: one weekly stand-up (Mon/Wed/Fri), one "2nd
+     Tuesday" monthly review, and one moved occurrence exception, so
+     recurrence behavior is immediately visible.
+  When finished, verify the app opens correctly from index.html.

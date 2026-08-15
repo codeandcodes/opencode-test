@@ -1,0 +1,35 @@
+id: tetris
+title: "Tetris"
+category: games
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a faithful Tetris:
+  1. Standard 10x20 playfield rendered on canvas, seven tetrominoes with
+     distinct colors.
+  2. SRS rotation system including wall kicks (implement the standard SRS
+     kick tables for JLSTZ and the separate I-piece table; O does not
+     rotate). Rotation near walls and stacks must kick correctly.
+  3. 7-bag randomizer: each bag contains all seven pieces exactly once,
+     shuffled.
+  4. Next-piece queue showing the upcoming 3 pieces, and a hold slot
+     (one hold per drop, swap disabled until the next piece locks).
+  5. Ghost piece showing where the current piece would hard-drop.
+  6. Controls, documented on-screen: left/right move with horizontal
+     auto-repeat, soft drop (faster fall, 1 point per cell), hard drop
+     (instant lock, 2 points per cell), rotate CW/CCW, hold, pause.
+  7. Scoring: 100/300/500/800 for single/double/triple/tetris multiplied
+     by level; combo bonus of 50 x combo x level for consecutive
+     line-clearing drops.
+  8. Levels: level = 1 + floor(lines/10); gravity interval decreases with
+     each level following a curve you document in a comment; lock delay of
+     500ms with reset on movement (max 15 resets per piece).
+  9. Pause/resume overlay, game over detection (spawn blocked), restart
+     button.
+  10. High score table (top 5, with dates) persisted in localStorage and
+      shown on the game-over screen.
+  When finished, verify the app opens correctly from index.html.

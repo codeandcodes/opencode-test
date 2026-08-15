@@ -1,0 +1,176 @@
+:root {
+  --bg: #0f1115;
+  --panel: #161a21;
+  --panel-2: #1c212b;
+  --border: #2a3040;
+  --fg: #d7dce5;
+  --muted: #8b93a5;
+  --accent: #7aa2f7;
+  --accent-dim: rgba(122, 162, 247, 0.12);
+  --green: #9ece6a;
+  --green-dim: rgba(158, 206, 106, 0.15);
+  --red: #f7768e;
+  --red-dim: rgba(247, 118, 142, 0.15);
+  --blue: #7aa2f7;
+  --blue-dim: rgba(122, 162, 247, 0.15);
+  --orange: #e0af68;
+  --orange-dim: rgba(224, 175, 104, 0.15);
+  --grey: #565f74;
+  --grey-dim: rgba(86, 95, 116, 0.2);
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent);
+}
+
+pre,
+code {
+  font-family: var(--mono);
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: 2px solid var(--accent-dim);
+  border-color: var(--accent);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 0.95rem;
+  height: 0.95rem;
+  padding: 0;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0f1115;
+  font-weight: 600;
+  padding: 0.35rem 1.1rem;
+}
+
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+/* status chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.08rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.chip-pass {
+  background: var(--green-dim);
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.chip-fail {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.chip-done {
+  background: var(--blue-dim);
+  color: var(--blue);
+  border-color: var(--blue);
+}
+
+.chip-timeout {
+  background: var(--orange-dim);
+  color: var(--orange);
+  border-color: var(--orange);
+}
+
+.chip-error {
+  background: transparent;
+  color: var(--red);
+  border-color: var(--red);
+  border-style: dashed;
+}
+
+.chip-interrupted {
+  background: var(--grey-dim);
+  color: var(--grey);
+  border-color: var(--grey);
+}
+
+.chip-running {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* spinner */
+.spinner {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

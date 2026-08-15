@@ -1,0 +1,33 @@
+id: physics-sandbox
+title: "Physics Sandbox"
+category: numerics
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a 2D rigid-circle physics sandbox on canvas:
+  1. Balls are circles with mass proportional to radius squared. Click
+     empty space to spawn a ball with random radius (10-30px) and color.
+  2. Gravity pulls balls down; balls collide elastically with the four
+     canvas walls and with EACH OTHER using impulse-based collision
+     resolution that conserves momentum (document the impulse formula in
+     a comment). No overlap sinking: resolve penetration positionally.
+  3. Restitution (bounciness) and air friction are adjustable via
+     sliders; gravity slider ranges from 0 (floaty) to 3x earth.
+  4. Drag interaction: press on a ball and drag; while held the ball
+     follows the pointer; on release it is thrown with a velocity
+     computed from the recent drag movement (not just the last frame).
+  5. Fixed-timestep simulation loop (e.g. 120Hz physics) decoupled from
+     the render loop via an accumulator, so behavior is stable when the
+     display is 60Hz or when frames stutter.
+  6. Pause button, single-step button (advance one physics step), clear
+     button, and a live FPS counter plus ball count.
+  7. Must remain smooth and stable with 50+ balls: use a simple spatial
+     partitioning (uniform grid) for the pair collision test rather than
+     naive O(n^2), and document it in a comment.
+  8. Start with 8 balls already bouncing so the physics is immediately
+     visible.
+  When finished, verify the app opens correctly from index.html.

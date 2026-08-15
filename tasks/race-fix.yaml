@@ -1,0 +1,212 @@
+id: race-fix
+title: "Fix the Race Without Touching the Test"
+category: concurrency
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory create a Go module "cache" (go.mod: module
+  cache, go 1.22) with exactly the two files below. cache.go as given
+  contains data races. Fix cache.go so all tests pass with the race
+  detector, WITHOUT changing the public API (New, Set, Get, Delete, Len)
+  and WITHOUT modifying cache_test.go — the grader restores the
+  canonical test file before running, so test edits are pointless. The
+  grader runs: go vet ./... && go test -race ./...
+
+  --- cache.go (contains the races — fix this file) ---
+  ```go
+  package cache
+
+  import "time"
+
+  type entry struct {
+  	value   any
+  	expires time.Time
+  }
+
+  type Cache struct {
+  	data map[string]entry
+  }
+
+  func New() *Cache {
+  	return &Cache{data: make(map[string]entry)}
+  }
+
+  func (c *Cache) Set(key string, value any, ttl time.Duration) {
+  	c.data[key] = entry{value: value, expires: time.Now().Add(ttl)}
+  }
+
+  func (c *Cache) Get(key string) (any, bool) {
+  	e, ok := c.data[key]
+  	if !ok {
+  		return nil, false
+  	}
+  	if time.Now().After(e.expires) {
+  		delete(c.data, key)
+  		return nil, false
+  	}
+  	return e.value, true
+  }
+
+  func (c *Cache) Delete(key string) {
+  	delete(c.data, key)
+  }
+
+  func (c *Cache) Len() int {
+  	n := 0
+  	for _, e := range c.data {
+  		if time.Now().Before(e.expires) {
+  			n++
+  		}
+  	}
+  	return n
+  }
+  ```
+
+  --- cache_test.go (do not modify) ---
+  ```go
+  package cache
+
+  import (
+  	"fmt"
+  	"sync"
+  	"testing"
+  	"time"
+  )
+
+  func TestBasic(t *testing.T) {
+  	c := New()
+  	c.Set("a", 1, time.Hour)
+  	if v, ok := c.Get("a"); !ok || v != 1 {
+  		t.Fatalf("get a: %v %v", v, ok)
+  	}
+  	c.Delete("a")
+  	if _, ok := c.Get("a"); ok {
+  		t.Fatal("deleted key present")
+  	}
+  }
+
+  func TestExpiry(t *testing.T) {
+  	c := New()
+  	c.Set("gone", 1, 5*time.Millisecond)
+  	c.Set("kept", 2, time.Hour)
+  	time.Sleep(30 * time.Millisecond)
+  	if _, ok := c.Get("gone"); ok {
+  		t.Fatal("expired key present")
+  	}
+  	if v, ok := c.Get("kept"); !ok || v != 2 {
+  		t.Fatalf("kept: %v %v", v, ok)
+  	}
+  	if n := c.Len(); n != 1 {
+  		t.Fatalf("Len=%d want 1", n)
+  	}
+  }
+
+  func TestConcurrent(t *testing.T) {
+  	c := New()
+  	var wg sync.WaitGroup
+  	for g := 0; g < 100; g++ {
+  		wg.Add(1)
+  		go func(g int) {
+  			defer wg.Done()
+  			for i := 0; i < 100; i++ {
+  				key := fmt.Sprintf("k%d", i%17)
+  				switch i % 4 {
+  				case 0:
+  					c.Set(key, g*1000+i, time.Hour)
+  				case 1:
+  					c.Get(key)
+  				case 2:
+  					c.Delete(key)
+  				case 3:
+  					_ = c.Len()
+  				}
+  			}
+  		}(g)
+  	}
+  	wg.Wait()
+  	if n := c.Len(); n < 0 || n > 17 {
+  		t.Fatalf("Len=%d out of range", n)
+  	}
+  	c.Set("final", 42, time.Hour)
+  	if v, ok := c.Get("final"); !ok || v != 42 {
+  		t.Fatalf("final: %v %v", v, ok)
+  	}
+  }
+  ```
+check: |
+  set -e
+  test -f go.mod || { echo "no go.mod"; exit 1; }
+  test -f cache.go || { echo "no cache.go"; exit 1; }
+  # restore the canonical test file; agent modifications are irrelevant
+  cat > cache_test.go <<'GOEOF'
+  package cache
+
+  import (
+  	"fmt"
+  	"sync"
+  	"testing"
+  	"time"
+  )
+
+  func TestBasic(t *testing.T) {
+  	c := New()
+  	c.Set("a", 1, time.Hour)
+  	if v, ok := c.Get("a"); !ok || v != 1 {
+  		t.Fatalf("get a: %v %v", v, ok)
+  	}
+  	c.Delete("a")
+  	if _, ok := c.Get("a"); ok {
+  		t.Fatal("deleted key present")
+  	}
+  }
+
+  func TestExpiry(t *testing.T) {
+  	c := New()
+  	c.Set("gone", 1, 5*time.Millisecond)
+  	c.Set("kept", 2, time.Hour)
+  	time.Sleep(30 * time.Millisecond)
+  	if _, ok := c.Get("gone"); ok {
+  		t.Fatal("expired key present")
+  	}
+  	if v, ok := c.Get("kept"); !ok || v != 2 {
+  		t.Fatalf("kept: %v %v", v, ok)
+  	}
+  	if n := c.Len(); n != 1 {
+  		t.Fatalf("Len=%d want 1", n)
+  	}
+  }
+
+  func TestConcurrent(t *testing.T) {
+  	c := New()
+  	var wg sync.WaitGroup
+  	for g := 0; g < 100; g++ {
+  		wg.Add(1)
+  		go func(g int) {
+  			defer wg.Done()
+  			for i := 0; i < 100; i++ {
+  				key := fmt.Sprintf("k%d", i%17)
+  				switch i % 4 {
+  				case 0:
+  					c.Set(key, g*1000+i, time.Hour)
+  				case 1:
+  					c.Get(key)
+  				case 2:
+  					c.Delete(key)
+  				case 3:
+  					_ = c.Len()
+  				}
+  			}
+  		}(g)
+  	}
+  	wg.Wait()
+  	if n := c.Len(); n < 0 || n > 17 {
+  		t.Fatalf("Len=%d out of range", n)
+  	}
+  	c.Set("final", 42, time.Hour)
+  	if v, ok := c.Get("final"); !ok || v != 42 {
+  		t.Fatalf("final: %v %v", v, ok)
+  	}
+  }
+  GOEOF
+  go vet ./...
+  go test -race ./...

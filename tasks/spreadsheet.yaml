@@ -1,0 +1,38 @@
+id: spreadsheet
+title: "Spreadsheet"
+category: algorithms
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a spreadsheet with a real formula engine:
+  1. Grid of columns A-Z and rows 1-100 with a fixed header row/column;
+     click to select, double-click or F2 to edit, Enter commits, Escape
+     cancels. Arrow keys, Tab, and Enter navigate. The selected cell's
+     raw content shows in a formula bar above the grid.
+  2. Formulas start with '='. Support cell references (B2), ranges
+     (A1:B10), numbers, strings in double quotes, parentheses, and
+     operators + - * / % ^ with correct precedence, plus comparison
+     operators = <> < <= > >= yielding TRUE/FALSE.
+  3. Functions: SUM, AVG, MIN, MAX, COUNT over any mix of ranges and
+     scalars, and IF(condition, then, else).
+  4. Dependency graph: editing a cell recalculates ONLY its transitive
+     dependents, in topological order. Document in a code comment how
+     you track dependencies.
+  5. Circular references (direct or indirect) must not hang: every cell
+     in the cycle displays #CYCLE! and other cells still work.
+  6. Errors: reference to a non-numeric value where a number is needed
+     shows #VALUE!, malformed formula shows #ERROR!, and errors
+     propagate through dependents.
+  7. Copy/paste (ctrl+c/ctrl+v) of a cell or selected rectangle with
+     RELATIVE reference adjustment (A1 pasted one row down becomes A2);
+     $-anchored references ($A$1, A$1, $A1) stay fixed appropriately.
+  8. Fill handle: drag the small square on the selection corner
+     downward/rightward to fill, adjusting relative references.
+  9. Column resize by dragging header edges.
+  10. Preload a small demo model (a budget with SUM/IF formulas and one
+      deliberate #CYCLE! pair) so all behavior is visible immediately.
+  When finished, verify the app opens correctly from index.html.

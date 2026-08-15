@@ -1,0 +1,23 @@
+id: checkers
+title: "Checkers with AI"
+category: games
+type: review
+timeout_minutes: 45
+prompt: |
+  Build a self-contained static web app: index.html entry point, no build
+  step, no external network access (no CDNs, no fonts, no fetch). All code
+  in plain HTML/CSS/JS files loaded from index.html.
+
+  Implement a complete checkers game:
+  1. 8x8 board, red vs black, red moves first. Click a piece, then a
+     destination.
+  2. Enforce ALL rules: diagonal moves on dark squares only, forced
+     captures (if any capture exists you must capture), multi-jump chains
+     in a single turn, kinging on the back rank, kings move both ways.
+  3. Undo button reverting one full turn; move history panel in standard
+     notation.
+  4. Win/draw detection (no pieces, no legal moves).
+  5. Single-player mode vs a minimax AI (selectable depth 1-5) with
+     alpha-beta pruning; AI respects forced captures.
+  6. Highlight selected piece, legal destinations, and last move.
+  When finished, verify the app opens correctly from index.html.

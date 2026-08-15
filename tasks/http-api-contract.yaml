@@ -1,0 +1,88 @@
+id: http-api-contract
+title: "HTTP API Contract"
+category: backend
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory build an HTTP server and provide EITHER an
+  executable ./run.sh that starts it OR a compiled binary ./server. The
+  server must listen on the port given by the PORT environment variable.
+  Any language. The grader starts it, runs ~20 assertions with curl,
+  then kills it — match this contract exactly.
+
+  Contract:
+  1. POST /login with JSON body {"user":"admin","pass":"secret"} →
+     200 with JSON {"token": "<jwt>"} where <jwt> is a signed JWT
+     (three dot-separated base64url segments; HMAC-SHA256 with any
+     server-side secret). Any other credentials → 401 with JSON
+     {"error": "..."}. Malformed JSON body → 400.
+  2. Every route under /api/ requires header
+     "Authorization: Bearer <token>" with a token your server verifies
+     (signature check — a tampered token MUST get 401). Missing or
+     invalid token → 401 with JSON {"error": "..."}.
+  3. GET /api/items — the server seeds exactly five items with ids
+     "item-1" through "item-5" (names are up to you) in that stable
+     order. Supports cursor pagination: query params limit (default 10)
+     and cursor (opaque string from a previous response). Response JSON:
+     {"items": [{"id": "...", "name": "..."}, ...],
+      "next_cursor": "..." or null when no more results}.
+     Requesting with limit=2 pages through 2+2+1 items with two non-null
+     cursors and then null. An unrecognized cursor value → 400.
+  4. GET /api/items/{id} → 200 with the item JSON and a strong ETag
+     header. A request with If-None-Match set to that ETag → 304 with
+     empty body. Unknown id → 404 with JSON {"error": "..."}.
+  5. All error responses are JSON with an "error" field and the correct
+     status code; Content-Type: application/json on every JSON response.
+check: |
+  set -u
+  PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+  BASE="http://127.0.0.1:$PORT"
+  if [ -x ./run.sh ]; then PORT=$PORT ./run.sh & SRV=$!
+  elif [ -x ./server ]; then PORT=$PORT ./server & SRV=$!
+  else echo "no ./run.sh or ./server"; exit 1; fi
+  trap 'kill $SRV 2>/dev/null; wait $SRV 2>/dev/null' EXIT
+
+  ready=0
+  for _ in $(seq 1 75); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/login" -H 'Content-Type: application/json' -d '{"user":"admin","pass":"secret"}' || true)
+    [ "$code" = "200" ] && { ready=1; break; }
+    sleep 0.2
+  done
+  [ $ready = 1 ] || { echo "server never became ready"; exit 1; }
+
+  fails=0
+  chk() { local name="$1" want="$2" got="$3"
+    [ "$got" = "$want" ] || { echo "FAIL $name: want '$want' got '$got'"; fails=$((fails+1)); }; }
+
+  TOKEN=$(curl -s -X POST "$BASE/login" -H 'Content-Type: application/json' -d '{"user":"admin","pass":"secret"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+  chk jwt-shape 3 "$(printf '%s' "$TOKEN" | awk -F. '{print NF}')"
+
+  chk login-badcreds 401 "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/login" -H 'Content-Type: application/json' -d '{"user":"admin","pass":"wrong"}')"
+  chk login-malformed 400 "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/login" -H 'Content-Type: application/json' -d '{not json')"
+  chk noauth 401 "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/items")"
+  chk tampered 401 "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}x" "$BASE/api/items")"
+
+  AUTH="Authorization: Bearer $TOKEN"
+  P1=$(curl -s -H "$AUTH" "$BASE/api/items?limit=2")
+  chk page1-ids 'item-1 item-2' "$(printf '%s' "$P1" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(" ".join(i["id"] for i in d["items"]))')"
+  C1=$(printf '%s' "$P1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["next_cursor"])')
+  chk cursor1-notnull no "$([ "$C1" = "None" ] && echo yes || echo no)"
+  P2=$(curl -s -H "$AUTH" "$BASE/api/items?limit=2&cursor=$C1")
+  chk page2-ids 'item-3 item-4' "$(printf '%s' "$P2" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(" ".join(i["id"] for i in d["items"]))')"
+  C2=$(printf '%s' "$P2" | python3 -c 'import json,sys; print(json.load(sys.stdin)["next_cursor"])')
+  P3=$(curl -s -H "$AUTH" "$BASE/api/items?limit=2&cursor=$C2")
+  chk page3-ids 'item-5' "$(printf '%s' "$P3" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(" ".join(i["id"] for i in d["items"]))')"
+  chk page3-cursor-null yes "$(printf '%s' "$P3" | python3 -c 'import json,sys; print("yes" if json.load(sys.stdin)["next_cursor"] is None else "no")')"
+  chk badcursor 400 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" "$BASE/api/items?cursor=bogus-cursor-zzz")"
+  chk default-limit 5 "$(curl -s -H "$AUTH" "$BASE/api/items" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["items"]))')"
+
+  ETAG=$(curl -s -D - -o /dev/null -H "$AUTH" "$BASE/api/items/item-3" | awk 'BEGIN{IGNORECASE=1} /^etag:/{print $2}' | tr -d '\r')
+  chk etag-present yes "$([ -n "$ETAG" ] && echo yes || echo no)"
+  chk etag-304 304 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" -H "If-None-Match: $ETAG" "$BASE/api/items/item-3")"
+  chk etag-304-empty 0 "$(curl -s -H "$AUTH" -H "If-None-Match: $ETAG" "$BASE/api/items/item-3" | wc -c | tr -d ' ')"
+  chk item-200 200 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" "$BASE/api/items/item-2")"
+  chk item-404 404 "$(curl -s -o /dev/null -w '%{http_code}' -H "$AUTH" "$BASE/api/items/item-99")"
+  chk item-404-error yes "$(curl -s -H "$AUTH" "$BASE/api/items/item-99" | python3 -c 'import json,sys; print("yes" if "error" in json.load(sys.stdin) else "no")')"
+
+  if [ $fails -gt 0 ]; then echo "$fails assertion(s) failed"; exit 1; fi
+  echo "all assertions passed"
