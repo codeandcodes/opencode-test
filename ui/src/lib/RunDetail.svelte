@@ -170,7 +170,7 @@
 
     <section>
       <h3>transcript</h3>
-      <Transcript events={detail.events} />
+      <Transcript events={detail.events} searchable />
     </section>
 
     <section>
