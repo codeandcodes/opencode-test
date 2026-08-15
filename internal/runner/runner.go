@@ -20,7 +20,7 @@ import (
 // ErrBusy is returned when a batch is already running.
 var ErrBusy = errors.New("a batch is already running")
 
-const checkTimeout = 5 * time.Minute
+const defaultCheckTimeout = 5 * time.Minute
 
 // Event is a progress notification streamed to subscribers.
 type Event struct {
@@ -67,6 +67,8 @@ type Runner struct {
 	// (0 disables). Event parts only land when they complete, so legitimate
 	// long generations produce minutes of silence — keep this generous.
 	IdleTimeout time.Duration
+	// CheckTimeout bounds a check script's execution (default 5 minutes).
+	CheckTimeout time.Duration
 
 	mu         sync.Mutex
 	running    bool
@@ -336,15 +338,49 @@ wait:
 	if j.Task.Type != "check" {
 		return finish("done", "")
 	}
-	checkCtx, cancelCheck := context.WithTimeout(ctx, checkTimeout)
-	defer cancelCheck()
-	check := exec.CommandContext(checkCtx, "bash", "-c", j.Task.Check)
+	return finish(r.runCheck(ctx, j, ref, ws))
+}
+
+// runCheck executes a check script in its own process group with output
+// captured straight to check.log. Files, not pipes: a backgrounded child
+// inheriting the script's fds must never be able to block us, and on
+// timeout the whole group is killed.
+func (r *Runner) runCheck(ctx context.Context, j JobSpec, ref store.RunRef, ws string) (string, string) {
+	timeout := r.CheckTimeout
+	if timeout <= 0 {
+		timeout = defaultCheckTimeout
+	}
+	logFile, err := os.Create(filepath.Join(r.store.RunPath(ref), "check.log"))
+	if err != nil {
+		return "error", "check log: " + err.Error()
+	}
+	defer logFile.Close()
+
+	checkCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	check := exec.Command("bash", "-c", j.Task.Check)
 	check.Dir = ws
 	check.Env = r.Env
-	out, err := check.CombinedOutput()
-	os.WriteFile(filepath.Join(r.store.RunPath(ref), "check.log"), out, 0o644)
-	if err != nil {
-		return finish("fail", "")
+	check.Stdout = logFile
+	check.Stderr = logFile
+	check.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := check.Start(); err != nil {
+		return "error", "check start: " + err.Error()
 	}
-	return finish("pass", "")
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- check.Wait() }()
+	select {
+	case <-checkCtx.Done():
+		syscall.Kill(-check.Process.Pid, syscall.SIGKILL)
+		<-waitDone
+		if ctx.Err() != nil {
+			return "error", "cancelled"
+		}
+		return "fail", fmt.Sprintf("check timeout after %s", timeout)
+	case err := <-waitDone:
+		if err != nil {
+			return "fail", ""
+		}
+	}
+	return "pass", ""
 }

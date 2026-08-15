@@ -208,6 +208,52 @@ func TestRunTimeout(t *testing.T) {
 	}
 }
 
+func TestCheckSurvivesPipeHoldingOrphan(t *testing.T) {
+	r, st := newTestRunner(t, "ok")
+	// The check backgrounds a long-lived child that inherits its fds, then
+	// exits non-zero. Pipe-based capture would block until the child died;
+	// file-based capture must return immediately.
+	task := tasks.Task{ID: "chk-orphan", Title: "c", Type: "check", TimeoutMinutes: 30,
+		Prompt: "p", Check: "echo starting; sleep 60 & echo backgrounded; exit 1"}
+	start := time.Now()
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{task}))
+	drain(t, r)
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("check with orphan took %s; runner wedged on inherited pipes", elapsed)
+	}
+	m, _ := st.Latest()
+	res := m["chk-orphan"]["m"]
+	if res.Status != "fail" {
+		t.Fatalf("status = %q, want fail", res.Status)
+	}
+	logPath := filepath.Join(st.RunPath(store.RunRef{Task: "chk-orphan", Model: "m", Timestamp: res.Timestamp}), "check.log")
+	raw, err := os.ReadFile(logPath)
+	if err != nil || !strings.Contains(string(raw), "backgrounded") {
+		t.Fatalf("check.log content: %q err %v", raw, err)
+	}
+}
+
+func TestCheckTimeoutKillsProcessGroup(t *testing.T) {
+	r, st := newTestRunner(t, "ok")
+	r.CheckTimeout = 500 * time.Millisecond
+	task := tasks.Task{ID: "chk-hang", Title: "c", Type: "check", TimeoutMinutes: 30,
+		Prompt: "p", Check: "echo begin; sleep 60; echo never"}
+	start := time.Now()
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{task}))
+	drain(t, r)
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("check timeout took %s", elapsed)
+	}
+	m, _ := st.Latest()
+	res := m["chk-hang"]["m"]
+	if res.Status != "fail" {
+		t.Fatalf("status = %q, want fail", res.Status)
+	}
+	if !strings.Contains(res.Error, "check timeout") {
+		t.Fatalf("error = %q, want check timeout mention", res.Error)
+	}
+}
+
 func TestIdleTimeout(t *testing.T) {
 	r, st := newTestRunner(t, "hang") // writes no events, sleeps 300s
 	r.Timeout = func(tasks.Task) time.Duration { return 30 * time.Second }
