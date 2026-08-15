@@ -21,9 +21,33 @@ benchmark tasks.
 - **Runs** execute `opencode run --dir <workspace> -m llama-swap/<model>
 --format json --auto <prompt>` serially (one GPU), grouped by model to
   amortize llama-swap's model-swap cost. Everything lands under
-  `runs/<task>/<model>/<timestamp>/`: the agent's workspace, the raw JSON
-  event stream, stderr, check output, and `result.json`. Plain files — grep,
-  diff, and delete at will.
+  `runs/<task>/<model>/<timestamp>/`: the agent's workspace (git-init'd so
+  the agent's project-root discovery anchors there), the raw JSON event
+  stream, stderr, check output, `provenance.json` (prompt sha, task
+  definition, the model's llama-swap serving entry), and `result.json`.
+  Plain files — grep, diff, and delete at will.
+
+## Features
+
+- **Incremental batches**: Run skips cells that already have a completed
+  measurement (done/pass/fail anywhere in history); error/timeout cells
+  always retry. `samples: N` tops each cell up to N measurements; force
+  re-runs regardless. Batches survive restarts: an interrupted queue is
+  offered for resume in the matrix banner.
+- **Verdicts**: judge review runs 👍/👎 with a note on the run page;
+  tallies appear in matrix cells and the leaderboard.
+- **Stats per run**: tokens in/out/reasoning, cache reads, generation
+  speed over model-active time, and first-token wait (model swap + initial
+  prefill) recorded separately so t/s stays honest.
+- **Partial credit**: assertion counts parsed from check logs (pytest,
+  go test, bash batteries) shown as `8✓ 1✗`.
+- **Live view**: while a batch runs, the matrix shows the current job's
+  freshness (last-event age), counters, and a live transcript; silently
+  stuck jobs are killed by the idle timeout.
+- **Leaderboard**: per-model rollup — check pass rate, reviews built,
+  verdicts, median t/s, error counts.
+- **Provenance & staleness**: every run records what exactly it measured;
+  cells whose task prompt has since changed are flagged Δ.
 
 ## Usage
 
