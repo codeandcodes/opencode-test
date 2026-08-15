@@ -1,14 +1,18 @@
 package runner
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"opencode-bench/internal/store"
 	"opencode-bench/internal/tasks"
 )
+
+func jsonUnmarshal(raw []byte, v any) error { return json.Unmarshal(raw, v) }
 
 func stubPath(t *testing.T) string {
 	t.Helper()
@@ -94,6 +98,63 @@ func TestRunReviewTaskOK(t *testing.T) {
 	ws := filepath.Join(st.RunPath(store.RunRef{Task: "tetris", Model: "model-a", Timestamp: res.Timestamp}), "workspace")
 	if _, err := os.Stat(filepath.Join(ws, "hello.txt")); err != nil {
 		t.Fatalf("workspace file missing: %v", err)
+	}
+}
+
+func TestProvenanceCaptured(t *testing.T) {
+	r, st := newTestRunner(t, "ok")
+	lsCfg := filepath.Join(t.TempDir(), "llama-swap.yaml")
+	os.WriteFile(lsCfg, []byte(`
+models:
+  model-a:
+    cmd: |
+      llama-server --model /x/y.gguf --temp 0.7
+    ttl: 300
+  other:
+    cmd: other-cmd
+`), 0o644)
+	r.LlamaSwapConfig = lsCfg
+
+	task := reviewTask("tetris")
+	if err := r.StartBatch([]string{"model-a"}, []tasks.Task{task}); err != nil {
+		t.Fatal(err)
+	}
+	drain(t, r)
+
+	m, _ := st.Latest()
+	res := m["tetris"]["model-a"]
+	wantSHA := PromptSHA(task.Prompt)
+	if res.PromptSHA != wantSHA {
+		t.Fatalf("result prompt sha = %q, want %q", res.PromptSHA, wantSHA)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(st.RunPath(store.RunRef{Task: "tetris", Model: "model-a", Timestamp: res.Timestamp}), "provenance.json"))
+	if err != nil {
+		t.Fatalf("provenance.json missing: %v", err)
+	}
+	var p map[string]any
+	if err := jsonUnmarshal(raw, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p["prompt_sha"] != wantSHA || p["model"] != "model-a" {
+		t.Fatalf("provenance: %v", p)
+	}
+	entry, _ := p["llama_swap_entry"].(map[string]any)
+	cmd, _ := entry["cmd"].(string)
+	if !strings.Contains(cmd, "--temp 0.7") {
+		t.Fatalf("llama-swap entry not captured: %v", entry)
+	}
+}
+
+func TestProvenanceWithoutLlamaSwapConfig(t *testing.T) {
+	r, st := newTestRunner(t, "ok")
+	if err := r.StartBatch([]string{"m"}, []tasks.Task{reviewTask("tetris")}); err != nil {
+		t.Fatal(err)
+	}
+	drain(t, r)
+	m, _ := st.Latest()
+	if m["tetris"]["m"].PromptSHA == "" {
+		t.Fatal("prompt sha should be recorded even without llama-swap config")
 	}
 }
 

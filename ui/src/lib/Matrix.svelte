@@ -123,6 +123,14 @@
                           encodeURIComponent(r.timestamp)}
                       >
                         <StatusChip status={r.status} />
+                        {#if r.stale}
+                          <span
+                            class="stale"
+                            title="task prompt changed since this run"
+                          >
+                            Δ
+                          </span>
+                        {/if}
                         {#if r.verdict}
                           <span
                             class="verdict-icon"
@@ -221,6 +229,11 @@
   }
   .verdict-icon {
     font-size: 0.8rem;
+  }
+  .stale {
+    color: var(--orange, #d29922);
+    font-weight: 700;
+    cursor: help;
   }
   .substats {
     display: block;

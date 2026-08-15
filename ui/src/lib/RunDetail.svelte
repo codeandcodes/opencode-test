@@ -165,6 +165,27 @@
       <h3>workspace</h3>
       <FileTree {ref} {files} />
     </section>
+
+    {#if detail.provenance}
+      <section>
+        <h3>provenance</h3>
+        <div class="prov">
+          <div>
+            <span class="k">prompt sha</span>
+            <code>{detail.provenance.prompt_sha.slice(0, 12)}</code>
+            <span class="k">captured</span>
+            {detail.provenance.captured_at}
+          </div>
+          {#if detail.provenance.llama_swap_entry}
+            <pre class="checklog">{JSON.stringify(
+                detail.provenance.llama_swap_entry,
+                null,
+                2,
+              )}</pre>
+          {/if}
+        </div>
+      </section>
+    {/if}
   {/if}
 </div>
 

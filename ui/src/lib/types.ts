@@ -39,6 +39,17 @@ export interface Result {
   error?: string;
   timestamp: string;
   verdict?: Verdict;
+  prompt_sha?: string;
+  /** true when the task prompt changed after this run (matrix responses only) */
+  stale?: boolean;
+}
+
+export interface Provenance {
+  model: string;
+  prompt_sha: string;
+  task: Task;
+  llama_swap_entry?: unknown;
+  captured_at: string;
 }
 
 export interface Verdict {
@@ -72,6 +83,7 @@ export interface RunDetailResponse {
   result: Result;
   events: unknown[];
   check_log: string;
+  provenance?: Provenance | null;
 }
 
 export interface FileEntry {

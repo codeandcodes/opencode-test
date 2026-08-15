@@ -196,6 +196,22 @@ func (s *Server) handleMatrix(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Mark results whose task prompt changed since they ran.
+	if lib, err := tasks.Load(s.cfg.TasksDir); err == nil {
+		current := map[string]string{}
+		for _, t := range lib.Tasks {
+			current[t.ID] = runner.PromptSHA(t.Prompt)
+		}
+		for taskID, byModel := range m {
+			want, known := current[taskID]
+			for model, res := range byModel {
+				if known && res.PromptSHA != "" && res.PromptSHA != want {
+					res.Stale = true
+					byModel[model] = res
+				}
+			}
+		}
+	}
 	running, cur, done, total := s.cfg.Runner.Active()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"matrix": m,
@@ -243,7 +259,13 @@ func (s *Server) handleRunDetail(w http.ResponseWriter, r *http.Request) {
 	if raw, err := os.ReadFile(filepath.Join(s.cfg.Store.RunPath(ref), "check.log")); err == nil {
 		checkLog = string(raw)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"result": res, "events": events, "check_log": checkLog})
+	var provenance json.RawMessage
+	if raw, err := os.ReadFile(filepath.Join(s.cfg.Store.RunPath(ref), "provenance.json")); err == nil && json.Valid(raw) {
+		provenance = raw
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"result": res, "events": events, "check_log": checkLog, "provenance": provenance,
+	})
 }
 
 func (s *Server) handleFilesList(w http.ResponseWriter, r *http.Request) {

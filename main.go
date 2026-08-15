@@ -22,10 +22,12 @@ func main() {
 	tasksDir := flag.String("tasks", "tasks", "task library directory")
 	runsDir := flag.String("runs", "runs", "runs output directory")
 	ocbin := flag.String("opencode", "opencode", "opencode binary")
+	lsCfg := flag.String("llama-swap-config", "", "path to llama-swap YAML config; when set, each run snapshots the model's serving entry into its provenance")
 	flag.Parse()
 
 	st := store.New(*runsDir)
 	run := runner.New(*ocbin, st)
+	run.LlamaSwapConfig = *lsCfg
 	s := server.New(server.Config{
 		OpencodeConfigPath: *occfg,
 		TasksDir:           *tasksDir,

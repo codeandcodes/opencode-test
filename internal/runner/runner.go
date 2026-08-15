@@ -42,6 +42,9 @@ type Runner struct {
 	Timeout func(tasks.Task) time.Duration
 	// Env is the environment for opencode processes; defaults to os.Environ().
 	Env []string
+	// LlamaSwapConfig optionally points at llama-swap's YAML config so each
+	// run can snapshot the model's serving entry into its provenance.
+	LlamaSwapConfig string
 
 	mu      sync.Mutex
 	running bool
@@ -156,8 +159,10 @@ func (r *Runner) runJob(ctx context.Context, j job) string {
 	if err != nil {
 		return "error"
 	}
+	prov := buildProvenance(j.task, j.model, r.LlamaSwapConfig)
+	writeProvenance(filepath.Join(r.store.RunPath(ref), "provenance.json"), prov)
 	res := store.Result{Task: j.task.ID, Model: j.model, Timestamp: ref.Timestamp,
-		StartedAt: time.Now().UTC()}
+		StartedAt: time.Now().UTC(), PromptSHA: prov.PromptSHA}
 	finish := func(status, errMsg string) string {
 		res.Status = status
 		res.Error = errMsg

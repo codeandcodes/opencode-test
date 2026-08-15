@@ -36,6 +36,11 @@ type Result struct {
 	GenSeconds float64 `json:"gen_seconds"`
 	Error      string  `json:"error,omitempty"`
 	Timestamp  string  `json:"timestamp"`
+	// PromptSHA is the sha256 of the task prompt this run executed.
+	PromptSHA string `json:"prompt_sha,omitempty"`
+	// Stale marks a result whose task prompt has changed since the run.
+	// Computed at serve time by the API; never persisted meaningfully.
+	Stale bool `json:"stale,omitempty"`
 	// Verdict is the human review judgment, stored separately in
 	// verdict.json and attached on read; never written by the runner.
 	Verdict *Verdict `json:"verdict,omitempty"`

@@ -182,6 +182,41 @@ func TestRunsLifecycle(t *testing.T) {
 	}
 }
 
+func TestStaleDetectionAndProvenance(t *testing.T) {
+	s, _, tasksDir := newTestServer(t, "ok")
+	rr, _ := doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}})
+	if rr.Code != 202 {
+		t.Fatalf("start = %d", rr.Code)
+	}
+	waitIdle(t, s)
+
+	_, matrix := doJSON(t, s, "GET", "/api/runs", nil)
+	cell := matrix["matrix"].(map[string]any)["tetris"].(map[string]any)["model-a"].(map[string]any)
+	if cell["stale"] == true {
+		t.Fatal("fresh run marked stale")
+	}
+	if cell["prompt_sha"] == nil || cell["prompt_sha"] == "" {
+		t.Fatal("prompt_sha missing from cell")
+	}
+	ts := cell["timestamp"].(string)
+
+	_, detail := doJSON(t, s, "GET", "/api/runs/tetris/model-a/"+ts, nil)
+	prov, _ := detail["provenance"].(map[string]any)
+	if prov == nil || prov["prompt_sha"] != cell["prompt_sha"] {
+		t.Fatalf("provenance missing from detail: %v", detail["provenance"])
+	}
+
+	// change the prompt -> run becomes stale
+	os.WriteFile(filepath.Join(tasksDir, "tetris.yaml"), []byte(
+		"id: tetris\ntitle: Tetris\ncategory: games\ntype: review\nprompt: build BETTER tetris\n"), 0o644)
+	_, matrix = doJSON(t, s, "GET", "/api/runs", nil)
+	cell = matrix["matrix"].(map[string]any)["tetris"].(map[string]any)["model-a"].(map[string]any)
+	if cell["stale"] != true {
+		t.Fatalf("run not marked stale after prompt change: %v", cell)
+	}
+}
+
 func TestVerdictLifecycle(t *testing.T) {
 	s, _, _ := newTestServer(t, "ok")
 	rr, _ := doJSON(t, s, "POST", "/api/runs", map[string]any{
