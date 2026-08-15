@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getFiles, getRun } from "./api";
+  import { fmtTokens, fmtTps, genTokens } from "./fmt";
   import Preview from "./Preview.svelte";
   import StatusChip from "./StatusChip.svelte";
   import { lastAssistantText } from "./transcript";
@@ -61,7 +62,8 @@
     <span>{Math.round(result.duration_sec)}s</span>
     <span>{result.messages} msg</span>
     <span>{result.tool_calls} tools</span>
-    <span>{result.tokens_in}/{result.tokens_out} tok</span>
+    <span>{fmtTokens(result.tokens_in)}→{fmtTokens(genTokens(result))} tok</span>
+    <span>{fmtTps(result)}</span>
   </div>
   {#if error}
     <p class="error">{error}</p>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getFiles, getHistory, getRun } from "./api";
+  import { fmtTokens, fmtTps } from "./fmt";
   import FileTree from "./FileTree.svelte";
   import Preview from "./Preview.svelte";
   import StatusChip from "./StatusChip.svelte";
@@ -81,7 +82,19 @@
       </span>
       <span class="stat">
         <span class="k">tokens</span>
-        {result.tokens_in} in / {result.tokens_out} out
+        {fmtTokens(result.tokens_in)} in
+        {#if result.cache_read > 0}({fmtTokens(result.cache_read)} cached){/if}
+        / {fmtTokens(result.tokens_out)} out
+        {#if result.tokens_reasoning > 0}
+          (+{fmtTokens(result.tokens_reasoning)} think)
+        {/if}
+      </span>
+      <span class="stat">
+        <span class="k">gen speed</span>
+        {fmtTps(result)}
+        {#if result.gen_seconds > 0}
+          <span class="k">over {Math.round(result.gen_seconds)}s</span>
+        {/if}
       </span>
       {#if result.error}
         <span class="stat error">{result.error}</span>

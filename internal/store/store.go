@@ -26,8 +26,15 @@ type Result struct {
 	ToolCalls   int       `json:"tool_calls"`
 	TokensIn    int       `json:"tokens_in"`
 	TokensOut   int       `json:"tokens_out"`
-	Error       string    `json:"error,omitempty"`
-	Timestamp   string    `json:"timestamp"`
+	// TokensReasoning counts thinking tokens reported separately from output.
+	TokensReasoning int `json:"tokens_reasoning"`
+	// CacheRead counts prompt tokens served from the provider's cache.
+	CacheRead int `json:"cache_read"`
+	// GenSeconds sums the text/reasoning part generation windows from the
+	// event stream — active generation time, excluding tool waits and load.
+	GenSeconds float64 `json:"gen_seconds"`
+	Error      string  `json:"error,omitempty"`
+	Timestamp  string  `json:"timestamp"`
 }
 
 // RunRef identifies one run directory.

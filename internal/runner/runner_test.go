@@ -53,6 +53,23 @@ func drain(t *testing.T, r *Runner) []Event {
 	}
 }
 
+// TestParseEventsRealStream pins the parser against an event stream captured
+// from a real `opencode run --format json` invocation (2026-08, opencode 1.1.x):
+// one assistant step answering "hello" with no tool calls.
+func TestParseEventsRealStream(t *testing.T) {
+	s := ParseEvents("testdata/real-events.jsonl")
+	if s.Messages != 1 || s.ToolCalls != 0 {
+		t.Fatalf("steps/tools: %+v", s)
+	}
+	if s.TokensIn != 7814 || s.TokensOut != 2 || s.TokensReasoning != 0 {
+		t.Fatalf("tokens: %+v", s)
+	}
+	// text part window: 1786805672184 -> 1786805672297 = 113ms
+	if s.GenSeconds < 0.112 || s.GenSeconds > 0.114 {
+		t.Fatalf("gen seconds: %+v", s)
+	}
+}
+
 func TestRunReviewTaskOK(t *testing.T) {
 	r, st := newTestRunner(t, "ok")
 	if err := r.StartBatch([]string{"model-a"}, []tasks.Task{reviewTask("tetris")}); err != nil {
@@ -64,8 +81,14 @@ func TestRunReviewTaskOK(t *testing.T) {
 	if res.Status != "done" {
 		t.Fatalf("status = %q (err %q), want done", res.Status, res.Error)
 	}
-	if res.Messages != 2 || res.ToolCalls != 1 || res.TokensIn != 100 || res.TokensOut != 200 {
+	if res.Messages != 1 || res.ToolCalls != 1 || res.TokensIn != 100 || res.TokensOut != 200 {
 		t.Fatalf("parsed stats wrong: %+v", res)
+	}
+	if res.TokensReasoning != 50 || res.CacheRead != 40 {
+		t.Fatalf("reasoning/cache stats wrong: %+v", res)
+	}
+	if res.GenSeconds < 1.99 || res.GenSeconds > 2.01 {
+		t.Fatalf("gen seconds = %v, want 2.0 from text part time span", res.GenSeconds)
 	}
 	ws := filepath.Join(st.RunPath(store.RunRef{Task: "tetris", Model: "model-a", Timestamp: res.Timestamp}), "workspace")
 	if _, err := os.Stat(filepath.Join(ws, "hello.txt")); err != nil {

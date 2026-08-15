@@ -163,8 +163,11 @@ func (r *Runner) runJob(ctx context.Context, j job) string {
 		res.Error = errMsg
 		res.FinishedAt = time.Now().UTC()
 		res.DurationSec = res.FinishedAt.Sub(res.StartedAt).Seconds()
-		eventsPath := filepath.Join(r.store.RunPath(ref), "events.jsonl")
-		res.Messages, res.ToolCalls, res.TokensIn, res.TokensOut = ParseEvents(eventsPath)
+		stats := ParseEvents(filepath.Join(r.store.RunPath(ref), "events.jsonl"))
+		res.Messages, res.ToolCalls = stats.Messages, stats.ToolCalls
+		res.TokensIn, res.TokensOut = stats.TokensIn, stats.TokensOut
+		res.TokensReasoning, res.CacheRead = stats.TokensReasoning, stats.CacheRead
+		res.GenSeconds = stats.GenSeconds
 		r.store.WriteResult(ref, res)
 		return status
 	}

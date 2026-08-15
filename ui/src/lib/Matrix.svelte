@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getMatrix, getModels, getTasks } from "./api";
+  import { fmtTokens, fmtTps, genTokens } from "./fmt";
   import RunControl from "./RunControl.svelte";
   import StatusChip from "./StatusChip.svelte";
   import type {
@@ -123,6 +124,18 @@
                       >
                         <StatusChip status={r.status} />
                         <span class="dur">{fmtDuration(r.duration_sec)}</span>
+                        {#if genTokens(r) > 0}
+                          <span
+                            class="substats"
+                            title={`${r.tokens_in} in / ${r.tokens_out} out` +
+                              (r.tokens_reasoning
+                                ? ` / ${r.tokens_reasoning} think`
+                                : "")}
+                          >
+                            {fmtTokens(r.tokens_in)}→{fmtTokens(genTokens(r))}
+                            · {fmtTps(r)}
+                          </span>
+                        {/if}
                       </a>
                     {:else}
                       <span class="nodata">—</span>
@@ -197,6 +210,14 @@
     color: var(--muted);
     font-family: var(--mono);
     font-size: 0.78rem;
+  }
+  .substats {
+    display: block;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    margin-top: 0.15rem;
+    white-space: nowrap;
   }
   .nodata {
     color: var(--border);

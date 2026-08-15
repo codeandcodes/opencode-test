@@ -32,6 +32,10 @@ export interface Result {
   tool_calls: number;
   tokens_in: number;
   tokens_out: number;
+  tokens_reasoning: number;
+  cache_read: number;
+  /** active generation seconds (text+reasoning windows), 0 if unknown */
+  gen_seconds: number;
   error?: string;
   timestamp: string;
 }

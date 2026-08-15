@@ -154,7 +154,7 @@ func TestRunsLifecycle(t *testing.T) {
 	if detail["result"].(map[string]any)["status"] != "done" {
 		t.Fatalf("detail = %v", detail)
 	}
-	if n := len(detail["events"].([]any)); n != 3 {
+	if n := len(detail["events"].([]any)); n != 4 {
 		t.Fatalf("events = %d", n)
 	}
 
