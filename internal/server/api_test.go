@@ -34,11 +34,14 @@ func newTestServer(t *testing.T, stubMode string) (*Server, *store.Store, string
 	r := runner.New(stub, st)
 	r.Timeout = func(tasks.Task) time.Duration { return 5 * time.Second }
 	r.Env = append(os.Environ(), "STUB_MODE="+stubMode)
+	stateFile := filepath.Join(dir, "runs", ".active-batch.json")
+	r.StateFile = stateFile
 
 	s := New(Config{
 		OpencodeConfigPath: occfg,
 		TasksDir:           tasksDir,
 		RunsDir:            filepath.Join(dir, "runs"),
+		BatchStateFile:     stateFile,
 		Store:              st,
 		Runner:             r,
 	})
@@ -179,6 +182,48 @@ func TestRunsLifecycle(t *testing.T) {
 	s.Handler().ServeHTTP(rr5, req5)
 	if rr5.Code == 200 && strings.Contains(rr5.Body.String(), "root:") {
 		t.Fatalf("path traversal served /etc/passwd")
+	}
+}
+
+func TestResumableBatchLifecycle(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	// no state file yet
+	rr, _ := doJSON(t, s, "GET", "/api/runs/resumable", nil)
+	if rr.Code != 404 {
+		t.Fatalf("resumable with no state = %d", rr.Code)
+	}
+	// simulate an interrupted batch
+	os.MkdirAll(filepath.Dir(s.cfg.BatchStateFile), 0o755)
+	os.WriteFile(s.cfg.BatchStateFile, []byte(
+		`{"jobs":[{"model":"model-a","task":"tetris"},{"model":"model-a","task":"ghost-task"}]}`), 0o644)
+
+	rr, body := doJSON(t, s, "GET", "/api/runs/resumable", nil)
+	if rr.Code != 200 || body["count"].(float64) != 2 {
+		t.Fatalf("resumable = %d %v", rr.Code, body)
+	}
+
+	rr, body = doJSON(t, s, "POST", "/api/runs/resume", nil)
+	if rr.Code != 202 || body["jobs"].(float64) != 1 || body["dropped"].(float64) != 1 {
+		t.Fatalf("resume = %d %v (ghost task should be dropped)", rr.Code, body)
+	}
+	waitIdle(t, s)
+	rr, _ = doJSON(t, s, "GET", "/api/runs/resumable", nil)
+	if rr.Code != 404 {
+		t.Fatalf("state should be gone after resumed batch completes: %d", rr.Code)
+	}
+}
+
+func TestResumableDismiss(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	os.MkdirAll(filepath.Dir(s.cfg.BatchStateFile), 0o755)
+	os.WriteFile(s.cfg.BatchStateFile, []byte(`{"jobs":[{"model":"model-a","task":"tetris"}]}`), 0o644)
+	rr, _ := doJSON(t, s, "DELETE", "/api/runs/resumable", nil)
+	if rr.Code != 204 {
+		t.Fatalf("dismiss = %d", rr.Code)
+	}
+	rr, _ = doJSON(t, s, "GET", "/api/runs/resumable", nil)
+	if rr.Code != 404 {
+		t.Fatalf("state survived dismiss: %d", rr.Code)
 	}
 }
 

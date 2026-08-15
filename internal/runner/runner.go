@@ -3,6 +3,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -58,15 +59,49 @@ type Runner struct {
 	// LlamaSwapConfig optionally points at llama-swap's YAML config so each
 	// run can snapshot the model's serving entry into its provenance.
 	LlamaSwapConfig string
+	// StateFile optionally persists the pending job list so an interrupted
+	// batch can be resumed after a crash or restart.
+	StateFile string
 
-	mu      sync.Mutex
-	running bool
-	cancel  context.CancelFunc
-	current Event
-	done    int
-	total   int
-	subs    map[int]chan Event
-	nextSub int
+	mu       sync.Mutex
+	running  bool
+	cancel   context.CancelFunc
+	shutdown bool // true when the current cancel is a shutdown, not a user cancel
+	current  Event
+	done     int
+	total    int
+	subs     map[int]chan Event
+	nextSub  int
+}
+
+// BatchState is the on-disk format of StateFile: jobs not yet completed,
+// in execution order (the first entry may be a killed in-flight job).
+type BatchState struct {
+	Jobs []BatchJob `json:"jobs"`
+}
+
+type BatchJob struct {
+	Model string `json:"model"`
+	Task  string `json:"task"`
+}
+
+func (r *Runner) writeState(jobs []JobSpec) {
+	if r.StateFile == "" {
+		return
+	}
+	st := BatchState{Jobs: []BatchJob{}}
+	for _, j := range jobs {
+		st.Jobs = append(st.Jobs, BatchJob{Model: j.Model, Task: j.Task.ID})
+	}
+	if out, err := json.Marshal(st); err == nil {
+		os.WriteFile(r.StateFile, out, 0o644)
+	}
+}
+
+func (r *Runner) clearState() {
+	if r.StateFile != "" {
+		os.Remove(r.StateFile)
+	}
 }
 
 func New(opencodeBin string, st *store.Store) *Runner {
@@ -119,9 +154,21 @@ func (r *Runner) Active() (bool, Event, int, int) {
 }
 
 // Cancel kills the current job's process group and skips remaining jobs.
+// The persisted batch state is discarded — cancelling is deliberate.
 func (r *Runner) Cancel() {
 	r.mu.Lock()
 	if r.cancel != nil {
+		r.cancel()
+	}
+	r.mu.Unlock()
+}
+
+// Shutdown cancels like Cancel but preserves the persisted batch state so
+// the interrupted batch can be offered for resume after restart.
+func (r *Runner) Shutdown() {
+	r.mu.Lock()
+	if r.cancel != nil {
+		r.shutdown = true
 		r.cancel()
 	}
 	r.mu.Unlock()
@@ -138,21 +185,28 @@ func (r *Runner) StartBatch(jobs []JobSpec) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.running, r.cancel = true, cancel
+	r.shutdown = false
 	r.done, r.total = 0, len(jobs)
 	r.mu.Unlock()
+	r.writeState(jobs)
 
 	go func() {
 		defer func() {
 			r.mu.Lock()
 			r.running = false
 			r.cancel = nil
+			preserve := r.shutdown
 			r.mu.Unlock()
+			if !preserve {
+				r.clearState()
+			}
 			r.publish(Event{Type: "batch_end"})
 		}()
-		for _, j := range jobs {
+		for i, j := range jobs {
 			if ctx.Err() != nil {
 				return
 			}
+			r.writeState(jobs[i:]) // pending = current job + the rest
 			r.publish(Event{Type: "job_start", Task: j.Task.ID, Model: j.Model, Status: "running"})
 			status := r.runJob(ctx, j)
 			r.publish(Event{Type: "job_end", Task: j.Task.ID, Model: j.Model, Status: status})

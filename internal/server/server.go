@@ -14,8 +14,11 @@ type Config struct {
 	TasksDir           string
 	RunsDir            string
 	OpencodeBin        string
-	Store              *store.Store
-	Runner             *runner.Runner
+	// BatchStateFile is where the runner persists its pending job list;
+	// the server reads it to offer resume of interrupted batches.
+	BatchStateFile string
+	Store          *store.Store
+	Runner         *runner.Runner
 }
 
 type Server struct {

@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { getMatrix, getModels, getTasks } from "./api";
+  import {
+    dismissResumable,
+    getMatrix,
+    getModels,
+    getResumable,
+    getTasks,
+    resumeBatch,
+    type ResumableBatch,
+  } from "./api";
   import { fmtTokens, fmtTps, genTokens } from "./fmt";
   import RunControl from "./RunControl.svelte";
   import StatusChip from "./StatusChip.svelte";
@@ -24,22 +32,47 @@
     total: 0,
   });
   let error = $state("");
+  let resumable = $state<ResumableBatch | null>(null);
+  let resumeMsg = $state("");
 
   async function load() {
     try {
-      const [m, t, mx] = await Promise.all([
+      const [m, t, mx, res] = await Promise.all([
         getModels(),
         getTasks(),
         getMatrix(),
+        getResumable(),
       ]);
       models = m;
       tasks = t.tasks;
       warnings = t.warnings ?? [];
       matrix = mx.matrix ?? {};
       active = mx.active;
+      resumable = res;
       error = "";
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function resume() {
+    resumeMsg = "";
+    try {
+      const r = await resumeBatch();
+      resumeMsg = `resumed: queued ${r.jobs}${r.skipped ? `, skipped ${r.skipped}` : ""}${r.dropped ? `, dropped ${r.dropped}` : ""}`;
+      resumable = null;
+      load();
+    } catch (e) {
+      resumeMsg = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function dismiss() {
+    try {
+      await dismissResumable();
+      resumable = null;
+    } catch (e) {
+      resumeMsg = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -77,6 +110,21 @@
 </script>
 
 <div class="matrix-page">
+  {#if resumable}
+    <div class="resume-banner">
+      <span>
+        Interrupted batch: <strong>{resumable.count}</strong> pending job{resumable.count ===
+        1
+          ? ""
+          : "s"}
+      </span>
+      <button type="button" class="primary" onclick={resume}>Resume</button>
+      <button type="button" onclick={dismiss}>Dismiss</button>
+    </div>
+  {/if}
+  {#if resumeMsg}
+    <p class="resume-msg">{resumeMsg}</p>
+  {/if}
   <RunControl {models} {tasks} {active} onchanged={load} />
 
   {#if error}
@@ -229,6 +277,34 @@
   }
   .verdict-icon {
     font-size: 0.8rem;
+  }
+  .resume-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    background: var(--panel);
+    border: 1px solid var(--orange, #d29922);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.88rem;
+  }
+  .resume-banner button {
+    font: inherit;
+    padding: 0.15rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .resume-banner button.primary {
+    border-color: var(--orange, #d29922);
+  }
+  .resume-msg {
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-style: italic;
+    margin: 0;
   }
   .stale {
     color: var(--orange, #d29922);

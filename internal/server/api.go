@@ -45,6 +45,9 @@ func (s *Server) registerAPI() {
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/files", s.handleFilesList)
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/files/{path...}", s.handleFile(false))
 	s.mux.HandleFunc("GET /api/runs/{task}/{model}/{ts}/preview/{path...}", s.handleFile(true))
+	s.mux.HandleFunc("GET /api/runs/resumable", s.handleResumableGet)
+	s.mux.HandleFunc("POST /api/runs/resume", s.handleResume)
+	s.mux.HandleFunc("DELETE /api/runs/resumable", s.handleResumableDismiss)
 	s.mux.HandleFunc("POST /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictSet)
 	s.mux.HandleFunc("DELETE /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictClear)
 	s.mux.HandleFunc("GET /api/events", s.handleSSE)
@@ -180,31 +183,12 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 	jobs := runner.Pairs(req.Models, selected)
 	skipped := 0
 	if !req.Force {
-		kept := jobs[:0]
-		for _, j := range jobs {
-			// A cell is complete when ANY of its runs finished with a valid
-			// measurement (done/pass/fail) — a later cancelled or errored
-			// attempt doesn't erase an earlier success. error/timeout/
-			// interrupted-only cells are infrastructure failures worth retrying.
-			history, err := s.cfg.Store.History(j.Task.ID, j.Model)
-			if err != nil {
-				writeErr(w, http.StatusInternalServerError, err)
-				return
-			}
-			completed := false
-			for _, res := range history {
-				if res.Status == "done" || res.Status == "pass" || res.Status == "fail" {
-					completed = true
-					break
-				}
-			}
-			if completed {
-				skipped++
-				continue
-			}
-			kept = append(kept, j)
+		var err error
+		jobs, skipped, err = s.filterCompleted(jobs)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
 		}
-		jobs = kept
 	}
 	if len(jobs) == 0 {
 		writeJSON(w, http.StatusOK, map[string]int{"jobs": 0, "skipped": skipped})
@@ -219,6 +203,107 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]int{"jobs": len(jobs), "skipped": skipped})
+}
+
+// filterCompleted drops jobs whose cell already holds a completed
+// measurement (done/pass/fail) anywhere in its history.
+func (s *Server) filterCompleted(jobs []runner.JobSpec) ([]runner.JobSpec, int, error) {
+	kept := jobs[:0]
+	skipped := 0
+	for _, j := range jobs {
+		history, err := s.cfg.Store.History(j.Task.ID, j.Model)
+		if err != nil {
+			return nil, 0, err
+		}
+		completed := false
+		for _, res := range history {
+			if res.Status == "done" || res.Status == "pass" || res.Status == "fail" {
+				completed = true
+				break
+			}
+		}
+		if completed {
+			skipped++
+			continue
+		}
+		kept = append(kept, j)
+	}
+	return kept, skipped, nil
+}
+
+func (s *Server) readBatchState() (runner.BatchState, error) {
+	var st runner.BatchState
+	if s.cfg.BatchStateFile == "" {
+		return st, os.ErrNotExist
+	}
+	raw, err := os.ReadFile(s.cfg.BatchStateFile)
+	if err != nil {
+		return st, err
+	}
+	if err := json.Unmarshal(raw, &st); err != nil {
+		return st, err
+	}
+	return st, nil
+}
+
+func (s *Server) handleResumableGet(w http.ResponseWriter, r *http.Request) {
+	running, _, _, _ := s.cfg.Runner.Active()
+	st, err := s.readBatchState()
+	if err != nil || running || len(st.Jobs) == 0 {
+		writeErr(w, http.StatusNotFound, errors.New("no resumable batch"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"jobs": st.Jobs, "count": len(st.Jobs)})
+}
+
+func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
+	st, err := s.readBatchState()
+	if err != nil || len(st.Jobs) == 0 {
+		writeErr(w, http.StatusNotFound, errors.New("no resumable batch"))
+		return
+	}
+	lib, err := tasks.Load(s.cfg.TasksDir)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	var jobs []runner.JobSpec
+	dropped := 0
+	for _, bj := range st.Jobs {
+		t, ok := lib.Get(bj.Task)
+		if !ok {
+			dropped++
+			continue
+		}
+		jobs = append(jobs, runner.JobSpec{Model: bj.Model, Task: t})
+	}
+	jobs, skipped, err := s.filterCompleted(jobs)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(jobs) == 0 {
+		os.Remove(s.cfg.BatchStateFile)
+		writeJSON(w, http.StatusOK, map[string]int{"jobs": 0, "skipped": skipped, "dropped": dropped})
+		return
+	}
+	if err := s.cfg.Runner.StartBatch(jobs); err != nil {
+		if errors.Is(err, runner.ErrBusy) {
+			writeErr(w, http.StatusConflict, err)
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	// StartBatch rewrote the state file for the new batch; the old one is superseded.
+	writeJSON(w, http.StatusAccepted, map[string]int{"jobs": len(jobs), "skipped": skipped, "dropped": dropped})
+}
+
+func (s *Server) handleResumableDismiss(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.BatchStateFile != "" {
+		os.Remove(s.cfg.BatchStateFile)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleRunsCancel(w http.ResponseWriter, r *http.Request) {

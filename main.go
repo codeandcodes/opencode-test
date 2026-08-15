@@ -28,11 +28,14 @@ func main() {
 	st := store.New(*runsDir)
 	run := runner.New(*ocbin, st)
 	run.LlamaSwapConfig = *lsCfg
+	stateFile := filepath.Join(*runsDir, ".active-batch.json")
+	run.StateFile = stateFile
 	s := server.New(server.Config{
 		OpencodeConfigPath: *occfg,
 		TasksDir:           *tasksDir,
 		RunsDir:            *runsDir,
 		OpencodeBin:        *ocbin,
+		BatchStateFile:     stateFile,
 		Store:              st,
 		Runner:             run,
 	})
@@ -44,8 +47,8 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sig
-		log.Print("shutting down, cancelling active batch")
-		run.Cancel()
+		log.Print("shutting down, cancelling active batch (state preserved for resume)")
+		run.Shutdown()
 		deadline := time.Now().Add(10 * time.Second)
 		for time.Now().Before(deadline) {
 			if running, _, _, _ := run.Active(); !running {

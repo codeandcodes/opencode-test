@@ -221,6 +221,76 @@ func TestBusy(t *testing.T) {
 	drain(t, r)
 }
 
+func waitForJobStart(t *testing.T, r *Runner) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if running, cur, _, _ := r.Active(); running && cur.Type == "job_start" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("no job started")
+}
+
+func TestBatchStateLifecycle(t *testing.T) {
+	r, _ := newTestRunner(t, "ok")
+	state := filepath.Join(t.TempDir(), "batch.json")
+	r.StateFile = state
+	if err := r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("t1"), reviewTask("t2")})); err != nil {
+		t.Fatal(err)
+	}
+	drain(t, r)
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatal("state file should be removed after natural completion")
+	}
+}
+
+func TestBatchStateOnUserCancel(t *testing.T) {
+	r, _ := newTestRunner(t, "hang")
+	r.Timeout = func(tasks.Task) time.Duration { return 10 * time.Second }
+	state := filepath.Join(t.TempDir(), "batch.json")
+	r.StateFile = state
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("t1"), reviewTask("t2")}))
+	waitForJobStart(t, r)
+	if _, err := os.Stat(state); err != nil {
+		t.Fatalf("state file missing mid-batch: %v", err)
+	}
+	r.Cancel()
+	drain(t, r)
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Fatal("state file should be removed on deliberate cancel")
+	}
+}
+
+func TestBatchStateOnShutdown(t *testing.T) {
+	r, _ := newTestRunner(t, "hang")
+	r.Timeout = func(tasks.Task) time.Duration { return 10 * time.Second }
+	state := filepath.Join(t.TempDir(), "batch.json")
+	r.StateFile = state
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("t1"), reviewTask("t2")}))
+	waitForJobStart(t, r)
+	r.Shutdown()
+	drain(t, r)
+	raw, err := os.ReadFile(state)
+	if err != nil {
+		t.Fatalf("state file should survive shutdown: %v", err)
+	}
+	var st struct {
+		Jobs []struct {
+			Model string `json:"model"`
+			Task  string `json:"task"`
+		} `json:"jobs"`
+	}
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	// current (killed) job + the never-started one
+	if len(st.Jobs) != 2 || st.Jobs[0].Task != "t1" || st.Jobs[1].Task != "t2" {
+		t.Fatalf("pending jobs = %+v", st.Jobs)
+	}
+}
+
 func TestEventOrderModelMajor(t *testing.T) {
 	r, _ := newTestRunner(t, "ok")
 	ts := []tasks.Task{reviewTask("t1"), reviewTask("t2")}

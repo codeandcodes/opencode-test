@@ -92,6 +92,32 @@ export function previewUrl(ref: RunRef, path: string): string {
   return `${runBase(ref)}/preview/${path.split("/").map(enc).join("/")}`;
 }
 
+export interface ResumableBatch {
+  jobs: { model: string; task: string }[];
+  count: number;
+}
+
+/** Returns null when there is no interrupted batch to resume. */
+export async function getResumable(): Promise<ResumableBatch | null> {
+  try {
+    return await request<ResumableBatch>("/api/runs/resumable");
+  } catch {
+    return null;
+  }
+}
+
+export function resumeBatch(): Promise<{
+  jobs: number;
+  skipped: number;
+  dropped: number;
+}> {
+  return request("/api/runs/resume", { method: "POST" });
+}
+
+export function dismissResumable(): Promise<void> {
+  return request("/api/runs/resumable", { method: "DELETE" });
+}
+
 export function setVerdict(
   ref: RunRef,
   verdict: "good" | "bad",
