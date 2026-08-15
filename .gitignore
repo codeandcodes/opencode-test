@@ -2,3 +2,4 @@ runs/
 ui/node_modules/
 ui/dist/
 opencode-bench
+internal/server/ui_dist/

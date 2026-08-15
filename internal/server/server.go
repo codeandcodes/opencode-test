@@ -32,6 +32,7 @@ func New(cfg Config) *Server {
 	if cfg.Store != nil && cfg.Runner != nil {
 		s.registerAPI()
 	}
+	s.registerUI()
 	return s
 }
 
