@@ -30,9 +30,22 @@ type Event struct {
 	Total  int    `json:"total"`
 }
 
-type job struct {
-	task  tasks.Task
-	model string
+// JobSpec names one (model, task) pair to execute.
+type JobSpec struct {
+	Model string
+	Task  tasks.Task
+}
+
+// Pairs expands models×tasks in model-major order, so all of one model's
+// tasks run before the next model loads (amortizing the swap cost).
+func Pairs(models []string, ts []tasks.Task) []JobSpec {
+	var out []JobSpec
+	for _, m := range models {
+		for _, t := range ts {
+			out = append(out, JobSpec{Model: m, Task: t})
+		}
+	}
+	return out
 }
 
 type Runner struct {
@@ -114,19 +127,14 @@ func (r *Runner) Cancel() {
 	r.mu.Unlock()
 }
 
-// StartBatch queues models×tasks in model-major order and runs them in a
-// single background goroutine. ErrBusy if a batch is active.
-func (r *Runner) StartBatch(models []string, ts []tasks.Task) error {
+// StartBatch queues the given jobs (see Pairs for the standard expansion)
+// and runs them serially in a single background goroutine. ErrBusy if a
+// batch is active.
+func (r *Runner) StartBatch(jobs []JobSpec) error {
 	r.mu.Lock()
 	if r.running {
 		r.mu.Unlock()
 		return ErrBusy
-	}
-	var jobs []job
-	for _, m := range models {
-		for _, t := range ts {
-			jobs = append(jobs, job{task: t, model: m})
-		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.running, r.cancel = true, cancel
@@ -145,23 +153,23 @@ func (r *Runner) StartBatch(models []string, ts []tasks.Task) error {
 			if ctx.Err() != nil {
 				return
 			}
-			r.publish(Event{Type: "job_start", Task: j.task.ID, Model: j.model, Status: "running"})
+			r.publish(Event{Type: "job_start", Task: j.Task.ID, Model: j.Model, Status: "running"})
 			status := r.runJob(ctx, j)
-			r.publish(Event{Type: "job_end", Task: j.task.ID, Model: j.model, Status: status})
+			r.publish(Event{Type: "job_end", Task: j.Task.ID, Model: j.Model, Status: status})
 		}
 	}()
 	return nil
 }
 
 // runJob executes one (task, model) pair and persists its Result.
-func (r *Runner) runJob(ctx context.Context, j job) string {
-	ref, ws, err := r.store.NewRunDir(j.task.ID, j.model)
+func (r *Runner) runJob(ctx context.Context, j JobSpec) string {
+	ref, ws, err := r.store.NewRunDir(j.Task.ID, j.Model)
 	if err != nil {
 		return "error"
 	}
-	prov := buildProvenance(j.task, j.model, r.LlamaSwapConfig)
+	prov := buildProvenance(j.Task, j.Model, r.LlamaSwapConfig)
 	writeProvenance(filepath.Join(r.store.RunPath(ref), "provenance.json"), prov)
-	res := store.Result{Task: j.task.ID, Model: j.model, Timestamp: ref.Timestamp,
+	res := store.Result{Task: j.Task.ID, Model: j.Model, Timestamp: ref.Timestamp,
 		StartedAt: time.Now().UTC(), PromptSHA: prov.PromptSHA}
 	finish := func(status, errMsg string) string {
 		res.Status = status
@@ -177,7 +185,7 @@ func (r *Runner) runJob(ctx context.Context, j job) string {
 		return status
 	}
 
-	jobCtx, cancel := context.WithTimeout(ctx, r.Timeout(j.task))
+	jobCtx, cancel := context.WithTimeout(ctx, r.Timeout(j.Task))
 	defer cancel()
 
 	eventsFile, err := os.Create(filepath.Join(r.store.RunPath(ref), "events.jsonl"))
@@ -192,7 +200,7 @@ func (r *Runner) runJob(ctx context.Context, j job) string {
 	defer stderrFile.Close()
 
 	cmd := exec.Command(r.opencode, "run",
-		"--dir", ws, "-m", "llama-swap/"+j.model, "--format", "json", "--auto", j.task.Prompt)
+		"--dir", ws, "-m", "llama-swap/"+j.Model, "--format", "json", "--auto", j.Task.Prompt)
 	cmd.Stdout = eventsFile
 	cmd.Stderr = stderrFile
 	cmd.Env = r.Env
@@ -219,12 +227,12 @@ func (r *Runner) runJob(ctx context.Context, j job) string {
 		return finish("error", "opencode produced no events")
 	}
 
-	if j.task.Type != "check" {
+	if j.Task.Type != "check" {
 		return finish("done", "")
 	}
 	checkCtx, cancelCheck := context.WithTimeout(ctx, checkTimeout)
 	defer cancelCheck()
-	check := exec.CommandContext(checkCtx, "bash", "-c", j.task.Check)
+	check := exec.CommandContext(checkCtx, "bash", "-c", j.Task.Check)
 	check.Dir = ws
 	check.Env = r.Env
 	out, err := check.CombinedOutput()

@@ -77,7 +77,7 @@ func TestParseEventsRealStream(t *testing.T) {
 
 func TestRunReviewTaskOK(t *testing.T) {
 	r, st := newTestRunner(t, "ok")
-	if err := r.StartBatch([]string{"model-a"}, []tasks.Task{reviewTask("tetris")}); err != nil {
+	if err := r.StartBatch(Pairs([]string{"model-a"}, []tasks.Task{reviewTask("tetris")})); err != nil {
 		t.Fatal(err)
 	}
 	drain(t, r)
@@ -116,7 +116,7 @@ models:
 	r.LlamaSwapConfig = lsCfg
 
 	task := reviewTask("tetris")
-	if err := r.StartBatch([]string{"model-a"}, []tasks.Task{task}); err != nil {
+	if err := r.StartBatch(Pairs([]string{"model-a"}, []tasks.Task{task})); err != nil {
 		t.Fatal(err)
 	}
 	drain(t, r)
@@ -148,7 +148,7 @@ models:
 
 func TestProvenanceWithoutLlamaSwapConfig(t *testing.T) {
 	r, st := newTestRunner(t, "ok")
-	if err := r.StartBatch([]string{"m"}, []tasks.Task{reviewTask("tetris")}); err != nil {
+	if err := r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")})); err != nil {
 		t.Fatal(err)
 	}
 	drain(t, r)
@@ -164,7 +164,7 @@ func TestRunCheckTaskPassAndFail(t *testing.T) {
 		Prompt: "p", Check: "test -f hello.txt"}
 	fail := tasks.Task{ID: "chk-fail", Title: "c", Type: "check", TimeoutMinutes: 30,
 		Prompt: "p", Check: "echo nope; false"}
-	if err := r.StartBatch([]string{"m"}, []tasks.Task{pass, fail}); err != nil {
+	if err := r.StartBatch(Pairs([]string{"m"}, []tasks.Task{pass, fail})); err != nil {
 		t.Fatal(err)
 	}
 	drain(t, r)
@@ -185,7 +185,7 @@ func TestRunCheckTaskPassAndFail(t *testing.T) {
 
 func TestRunErrorMode(t *testing.T) {
 	r, st := newTestRunner(t, "fail")
-	r.StartBatch([]string{"m"}, []tasks.Task{reviewTask("tetris")})
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")}))
 	drain(t, r)
 	m, _ := st.Latest()
 	if got := m["tetris"]["m"].Status; got != "error" {
@@ -197,7 +197,7 @@ func TestRunTimeout(t *testing.T) {
 	r, st := newTestRunner(t, "hang")
 	r.Timeout = func(tasks.Task) time.Duration { return 500 * time.Millisecond }
 	start := time.Now()
-	r.StartBatch([]string{"m"}, []tasks.Task{reviewTask("tetris")})
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")}))
 	drain(t, r)
 	if time.Since(start) > 10*time.Second {
 		t.Fatal("timeout did not kill the process promptly")
@@ -211,10 +211,10 @@ func TestRunTimeout(t *testing.T) {
 func TestBusy(t *testing.T) {
 	r, _ := newTestRunner(t, "hang")
 	r.Timeout = func(tasks.Task) time.Duration { return 3 * time.Second }
-	if err := r.StartBatch([]string{"m"}, []tasks.Task{reviewTask("tetris")}); err != nil {
+	if err := r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")})); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.StartBatch([]string{"m"}, []tasks.Task{reviewTask("tetris")}); err != ErrBusy {
+	if err := r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")})); err != ErrBusy {
 		t.Fatalf("err = %v, want ErrBusy", err)
 	}
 	r.Cancel()
@@ -224,7 +224,7 @@ func TestBusy(t *testing.T) {
 func TestEventOrderModelMajor(t *testing.T) {
 	r, _ := newTestRunner(t, "ok")
 	ts := []tasks.Task{reviewTask("t1"), reviewTask("t2")}
-	if err := r.StartBatch([]string{"m1", "m2"}, ts); err != nil {
+	if err := r.StartBatch(Pairs([]string{"m1", "m2"}, ts)); err != nil {
 		t.Fatal(err)
 	}
 	events := drain(t, r)

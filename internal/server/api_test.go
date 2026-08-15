@@ -182,6 +182,44 @@ func TestRunsLifecycle(t *testing.T) {
 	}
 }
 
+func TestSkipCompletedByDefault(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	body := map[string]any{"models": []string{"model-a"}, "tasks": []string{"tetris"}}
+	rr, resp := doJSON(t, s, "POST", "/api/runs", body)
+	if rr.Code != 202 || resp["jobs"].(float64) != 1 {
+		t.Fatalf("first run: %d %v", rr.Code, resp)
+	}
+	waitIdle(t, s)
+
+	rr, resp = doJSON(t, s, "POST", "/api/runs", body)
+	if rr.Code != 200 || resp["jobs"].(float64) != 0 || resp["skipped"].(float64) != 1 {
+		t.Fatalf("rerun should skip completed: %d %v", rr.Code, resp)
+	}
+
+	rr, resp = doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}, "force": true})
+	if rr.Code != 202 || resp["jobs"].(float64) != 1 || resp["skipped"].(float64) != 0 {
+		t.Fatalf("force should re-run: %d %v", rr.Code, resp)
+	}
+	waitIdle(t, s)
+}
+
+func TestErroredRunsRetryByDefault(t *testing.T) {
+	s, _, _ := newTestServer(t, "fail")
+	body := map[string]any{"models": []string{"model-a"}, "tasks": []string{"tetris"}}
+	rr, _ := doJSON(t, s, "POST", "/api/runs", body)
+	if rr.Code != 202 {
+		t.Fatalf("first run: %d", rr.Code)
+	}
+	waitIdle(t, s)
+
+	rr, resp := doJSON(t, s, "POST", "/api/runs", body)
+	if rr.Code != 202 || resp["jobs"].(float64) != 1 {
+		t.Fatalf("errored cell should retry without force: %d %v", rr.Code, resp)
+	}
+	waitIdle(t, s)
+}
+
 func TestStaleDetectionAndProvenance(t *testing.T) {
 	s, _, tasksDir := newTestServer(t, "ok")
 	rr, _ := doJSON(t, s, "POST", "/api/runs", map[string]any{

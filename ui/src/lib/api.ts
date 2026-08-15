@@ -59,11 +59,12 @@ export function getMatrix(): Promise<MatrixResponse> {
 export function startRuns(
   models: string[],
   tasks: string[],
-): Promise<{ jobs: number }> {
+  force = false,
+): Promise<{ jobs: number; skipped: number }> {
   return request("/api/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ models, tasks }),
+    body: JSON.stringify({ models, tasks, force }),
   });
 }
 

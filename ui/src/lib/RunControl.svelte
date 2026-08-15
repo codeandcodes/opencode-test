@@ -26,14 +26,21 @@
 
   let busy = $state(false);
   let error = $state("");
+  let force = $state(false);
+  let lastQueued = $state("");
 
   async function run() {
     const ms = models.filter((m) => isOn(selModels, m.id)).map((m) => m.id);
     const ts = tasks.filter((t) => isOn(selTasks, t.id)).map((t) => t.id);
     busy = true;
     error = "";
+    lastQueued = "";
     try {
-      await startRuns(ms, ts);
+      const res = await startRuns(ms, ts, force);
+      lastQueued =
+        res.jobs === 0
+          ? `nothing to do — ${res.skipped} cell${res.skipped === 1 ? "" : "s"} already complete (check "re-run completed" for more samples)`
+          : `queued ${res.jobs}${res.skipped ? ` · skipped ${res.skipped} already complete` : ""}`;
       onchanged?.();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -94,6 +101,10 @@
     <button type="button" onclick={cancel} disabled={!active.running}>
       Cancel
     </button>
+    <label class="force">
+      <input type="checkbox" bind:checked={force} />
+      re-run completed (extra samples)
+    </label>
     {#if active.running}
       <span class="progress">
         <span class="spinner" aria-hidden="true"></span>
@@ -102,6 +113,9 @@
           <span class="current">{active.task} × {active.model}</span>
         {/if}
       </span>
+    {/if}
+    {#if lastQueued}
+      <span class="queued">{lastQueued}</span>
     {/if}
     {#if error}
       <span class="error">{error}</span>
@@ -165,5 +179,14 @@
   .error {
     color: var(--red);
     font-size: 0.85rem;
+  }
+  .force {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .queued {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-style: italic;
   }
 </style>

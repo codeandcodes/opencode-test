@@ -136,6 +136,9 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Models []string `json:"models"`
 		Tasks  []string `json:"tasks"`
+		// Force re-runs cells that already have a completed result; by
+		// default those are skipped so batches are incremental.
+		Force bool `json:"force"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -174,7 +177,32 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 		}
 		selected = append(selected, t)
 	}
-	if err := s.cfg.Runner.StartBatch(req.Models, selected); err != nil {
+	jobs := runner.Pairs(req.Models, selected)
+	skipped := 0
+	if !req.Force {
+		latest, err := s.cfg.Store.Latest()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		kept := jobs[:0]
+		for _, j := range jobs {
+			status := latest[j.Task.ID][j.Model].Status
+			// done/pass/fail are completed measurements; error, timeout,
+			// and interrupted runs are infrastructure failures worth retrying.
+			if status == "done" || status == "pass" || status == "fail" {
+				skipped++
+				continue
+			}
+			kept = append(kept, j)
+		}
+		jobs = kept
+	}
+	if len(jobs) == 0 {
+		writeJSON(w, http.StatusOK, map[string]int{"jobs": 0, "skipped": skipped})
+		return
+	}
+	if err := s.cfg.Runner.StartBatch(jobs); err != nil {
 		if errors.Is(err, runner.ErrBusy) {
 			writeErr(w, http.StatusConflict, err)
 			return
@@ -182,7 +210,7 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]int{"jobs": len(req.Models) * len(selected)})
+	writeJSON(w, http.StatusAccepted, map[string]int{"jobs": len(jobs), "skipped": skipped})
 }
 
 func (s *Server) handleRunsCancel(w http.ResponseWriter, r *http.Request) {
