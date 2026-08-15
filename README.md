@@ -33,7 +33,9 @@ make build          # builds the Svelte UI and the Go binary (embedded UI)
 ```
 
 Flags: `-listen`, `-opencode-config`, `-tasks`, `-runs`, `-opencode`
-(binary path), `-llama-swap-config` (path to llama-swap's YAML; when set,
+(binary path), `-idle-timeout` (minutes of event-stream silence before a
+job is killed as stuck, default 10, 0 disables), `-llama-swap-config`
+(path to llama-swap's YAML; when set,
 each run snapshots the model's serving entry — quant, sampling flags,
 context — into its `provenance.json`, and the matrix flags runs as stale
 when a task's prompt changes after they ran).

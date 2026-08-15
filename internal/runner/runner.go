@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,6 +63,10 @@ type Runner struct {
 	// StateFile optionally persists the pending job list so an interrupted
 	// batch can be resumed after a crash or restart.
 	StateFile string
+	// IdleTimeout kills a job whose event stream has been silent this long
+	// (0 disables). Event parts only land when they complete, so legitimate
+	// long generations produce minutes of silence — keep this generous.
+	IdleTimeout time.Duration
 
 	mu         sync.Mutex
 	running    bool
@@ -121,6 +126,13 @@ func (r *Runner) clearState() {
 	if r.StateFile != "" {
 		os.Remove(r.StateFile)
 	}
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a < b && a > 0 {
+		return a
+	}
+	return b
 }
 
 func New(opencodeBin string, st *store.Store) *Runner {
@@ -285,17 +297,36 @@ func (r *Runner) runJob(ctx context.Context, j JobSpec) string {
 	}
 	waitDone := make(chan error, 1)
 	go func() { waitDone <- cmd.Wait() }()
-	select {
-	case <-jobCtx.Done():
+	eventsPath := filepath.Join(r.store.RunPath(ref), "events.jsonl")
+	var idleTick <-chan time.Time
+	if r.IdleTimeout > 0 {
+		t := time.NewTicker(minDuration(r.IdleTimeout/4, 5*time.Second))
+		defer t.Stop()
+		idleTick = t.C
+	}
+	killAndDrain := func() {
 		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		<-waitDone
-		if ctx.Err() != nil {
-			return finish("error", "cancelled")
-		}
-		return finish("timeout", "task timeout exceeded")
-	case err := <-waitDone:
-		if err != nil {
-			return finish("error", "opencode: "+err.Error())
+	}
+wait:
+	for {
+		select {
+		case <-jobCtx.Done():
+			killAndDrain()
+			if ctx.Err() != nil {
+				return finish("error", "cancelled")
+			}
+			return finish("timeout", "task timeout exceeded")
+		case <-idleTick:
+			if fi, err := os.Stat(eventsPath); err == nil && time.Since(fi.ModTime()) > r.IdleTimeout {
+				killAndDrain()
+				return finish("timeout", fmt.Sprintf("idle timeout: no events for %s", r.IdleTimeout))
+			}
+		case err := <-waitDone:
+			if err != nil {
+				return finish("error", "opencode: "+err.Error())
+			}
+			break wait
 		}
 	}
 	if fi, err := eventsFile.Stat(); err != nil || fi.Size() == 0 {

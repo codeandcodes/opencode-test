@@ -23,11 +23,13 @@ func main() {
 	runsDir := flag.String("runs", "runs", "runs output directory")
 	ocbin := flag.String("opencode", "opencode", "opencode binary")
 	lsCfg := flag.String("llama-swap-config", "", "path to llama-swap YAML config; when set, each run snapshots the model's serving entry into its provenance")
+	idleMin := flag.Int("idle-timeout", 10, "kill a job when its event stream is silent this many minutes (0 disables)")
 	flag.Parse()
 
 	st := store.New(*runsDir)
 	run := runner.New(*ocbin, st)
 	run.LlamaSwapConfig = *lsCfg
+	run.IdleTimeout = time.Duration(*idleMin) * time.Minute
 	stateFile := filepath.Join(*runsDir, ".active-batch.json")
 	run.StateFile = stateFile
 	s := server.New(server.Config{

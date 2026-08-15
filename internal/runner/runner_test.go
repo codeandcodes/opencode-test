@@ -208,6 +208,37 @@ func TestRunTimeout(t *testing.T) {
 	}
 }
 
+func TestIdleTimeout(t *testing.T) {
+	r, st := newTestRunner(t, "hang") // writes no events, sleeps 300s
+	r.Timeout = func(tasks.Task) time.Duration { return 30 * time.Second }
+	r.IdleTimeout = 400 * time.Millisecond
+	start := time.Now()
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")}))
+	drain(t, r)
+	if time.Since(start) > 10*time.Second {
+		t.Fatal("idle detection did not kill the silent job promptly")
+	}
+	m, _ := st.Latest()
+	res := m["tetris"]["m"]
+	if res.Status != "timeout" {
+		t.Fatalf("status = %q, want timeout", res.Status)
+	}
+	if !strings.Contains(res.Error, "idle") {
+		t.Fatalf("error = %q, want idle mention", res.Error)
+	}
+}
+
+func TestIdleTimeoutDisabled(t *testing.T) {
+	r, st := newTestRunner(t, "ok")
+	r.IdleTimeout = 0 // disabled; normal fast run must be unaffected
+	r.StartBatch(Pairs([]string{"m"}, []tasks.Task{reviewTask("tetris")}))
+	drain(t, r)
+	m, _ := st.Latest()
+	if got := m["tetris"]["m"].Status; got != "done" {
+		t.Fatalf("status = %q", got)
+	}
+}
+
 func TestBusy(t *testing.T) {
 	r, _ := newTestRunner(t, "hang")
 	r.Timeout = func(tasks.Task) time.Duration { return 3 * time.Second }
