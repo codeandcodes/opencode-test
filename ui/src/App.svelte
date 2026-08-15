@@ -1,5 +1,6 @@
 <script lang="ts">
   import Compare from "./lib/Compare.svelte";
+  import Leaderboard from "./lib/Leaderboard.svelte";
   import Matrix from "./lib/Matrix.svelte";
   import NewTask from "./lib/NewTask.svelte";
   import RunDetail from "./lib/RunDetail.svelte";
@@ -10,6 +11,7 @@
     | { page: "matrix" }
     | { page: "run"; task: string; model: string; ts: string }
     | { page: "compare" }
+    | { page: "leaderboard" }
     | { page: "new" };
 
   function parseRoute(h: string): Route {
@@ -26,6 +28,7 @@
       }
     }
     if (p === "/compare") return { page: "compare" };
+    if (p === "/leaderboard") return { page: "leaderboard" };
     if (p === "/new") return { page: "new" };
     return { page: "matrix" };
   }
@@ -61,6 +64,9 @@
     Matrix
   </a>
   <a href="#/compare" class:current={route.page === "compare"}>Compare</a>
+  <a href="#/leaderboard" class:current={route.page === "leaderboard"}>
+    Leaderboard
+  </a>
   <a href="#/new" class:current={route.page === "new"}>New Task</a>
   {#if live}
     <span class="live" title="{live.task} × {live.model}">
@@ -78,6 +84,8 @@
     {/key}
   {:else if route.page === "compare"}
     <Compare />
+  {:else if route.page === "leaderboard"}
+    <Leaderboard />
   {:else if route.page === "new"}
     <NewTask />
   {:else}

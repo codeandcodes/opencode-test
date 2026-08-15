@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"opencode-bench/internal/config"
@@ -52,7 +53,85 @@ func (s *Server) registerAPI() {
 	s.mux.HandleFunc("DELETE /api/runs/resumable", s.handleResumableDismiss)
 	s.mux.HandleFunc("POST /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictSet)
 	s.mux.HandleFunc("DELETE /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictClear)
+	s.mux.HandleFunc("GET /api/leaderboard", s.handleLeaderboard)
 	s.mux.HandleFunc("GET /api/events", s.handleSSE)
+}
+
+// leaderboardRow aggregates one model's standing across all task cells.
+type leaderboardRow struct {
+	Model            string  `json:"model"`
+	CheckCells       int     `json:"check_cells"`        // check cells with ≥1 completed sample
+	CheckCellsPassed int     `json:"check_cells_passed"` // of those, cells with ≥1 pass
+	ReviewsDone      int     `json:"reviews_done"`       // review cells with ≥1 completed sample
+	VerdictGood      int     `json:"verdict_good"`
+	VerdictBad       int     `json:"verdict_bad"`
+	Errors           int     `json:"errors"` // cells whose latest run is an infrastructure failure
+	MedianTps        float64 `json:"median_tps"`
+	Samples          int     `json:"samples"`
+}
+
+func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	latest, err := s.cfg.Store.Latest()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	rows := map[string]*leaderboardRow{}
+	var tpsSamples = map[string][]float64{}
+	for taskID, byModel := range latest {
+		for model, latestRes := range byModel {
+			row := rows[model]
+			if row == nil {
+				row = &leaderboardRow{Model: model}
+				rows[model] = row
+			}
+			history, err := s.cfg.Store.History(taskID, model)
+			if err != nil {
+				continue
+			}
+			agg := store.Aggregate(history)
+			row.Samples += agg.Samples
+			row.VerdictGood += agg.VerdictGood
+			row.VerdictBad += agg.VerdictBad
+			if agg.MedianTps > 0 {
+				tpsSamples[model] = append(tpsSamples[model], agg.MedianTps)
+			}
+			// Task type is inferred from statuses: pass/fail only come
+			// from check tasks, done only from review tasks.
+			if agg.Passes+agg.Fails > 0 {
+				row.CheckCells++
+				if agg.Passes > 0 {
+					row.CheckCellsPassed++
+				}
+			} else if agg.Dones > 0 {
+				row.ReviewsDone++
+			}
+			switch latestRes.Status {
+			case "error", "timeout", "interrupted":
+				row.Errors++
+			}
+		}
+	}
+	out := make([]leaderboardRow, 0, len(rows))
+	for model, row := range rows {
+		if tps := tpsSamples[model]; len(tps) > 0 {
+			sort.Float64s(tps)
+			mid := len(tps) / 2
+			if len(tps)%2 == 1 {
+				row.MedianTps = tps[mid]
+			} else {
+				row.MedianTps = (tps[mid-1] + tps[mid]) / 2
+			}
+		}
+		out = append(out, *row)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CheckCellsPassed != out[j].CheckCellsPassed {
+			return out[i].CheckCellsPassed > out[j].CheckCellsPassed
+		}
+		return out[i].Model < out[j].Model
+	})
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleVerdictSet(w http.ResponseWriter, r *http.Request) {

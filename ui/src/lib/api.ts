@@ -93,6 +93,22 @@ export function previewUrl(ref: RunRef, path: string): string {
   return `${runBase(ref)}/preview/${path.split("/").map(enc).join("/")}`;
 }
 
+export interface LeaderboardRow {
+  model: string;
+  check_cells: number;
+  check_cells_passed: number;
+  reviews_done: number;
+  verdict_good: number;
+  verdict_bad: number;
+  errors: number;
+  median_tps: number;
+  samples: number;
+}
+
+export function getLeaderboard(): Promise<LeaderboardRow[]> {
+  return request("/api/leaderboard");
+}
+
 export interface ActiveTail {
   task: string;
   model: string;

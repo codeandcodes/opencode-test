@@ -398,6 +398,52 @@ func TestVerdictLifecycle(t *testing.T) {
 	}
 }
 
+func TestLeaderboard(t *testing.T) {
+	s, st, _ := newTestServer(t, "ok")
+	write := func(task, model, status string, tps float64, verdict string) {
+		ref, _, _ := st.NewRunDir(task, model)
+		r := store.Result{Task: task, Model: model, Status: status, Timestamp: ref.Timestamp,
+			TokensOut: int(tps * 10), GenSeconds: 10}
+		st.WriteResult(ref, r)
+		if verdict != "" {
+			st.WriteVerdict(ref, store.Verdict{Verdict: verdict})
+		}
+	}
+	// model-a: 2 check cells (1 pass, 1 fail), 1 review judged good
+	write("chk1", "model-a", "pass", 50, "")
+	write("chk2", "model-a", "fail", 70, "")
+	write("rev1", "model-a", "done", 60, "good")
+	// model-b: 1 check pass, 1 review judged bad, 1 error
+	write("chk1", "model-b", "pass", 100, "")
+	write("rev1", "model-b", "done", 90, "bad")
+	write("chk2", "model-b", "error", 0, "")
+
+	rr, _ := doJSON(t, s, "GET", "/api/leaderboard", nil)
+	if rr.Code != 200 {
+		t.Fatalf("code = %d", rr.Code)
+	}
+	var rows []map[string]any
+	json.Unmarshal(rr.Body.Bytes(), &rows)
+	byModel := map[string]map[string]any{}
+	for _, r := range rows {
+		byModel[r["model"].(string)] = r
+	}
+	a := byModel["model-a"]
+	if a["check_cells_passed"].(float64) != 1 || a["check_cells"].(float64) != 2 {
+		t.Fatalf("model-a checks: %v", a)
+	}
+	if a["verdict_good"].(float64) != 1 || a["reviews_done"].(float64) != 1 {
+		t.Fatalf("model-a reviews: %v", a)
+	}
+	if tps := a["median_tps"].(float64); tps < 59 || tps > 61 {
+		t.Fatalf("model-a tps: %v", tps)
+	}
+	b := byModel["model-b"]
+	if b["errors"].(float64) != 1 || b["verdict_bad"].(float64) != 1 {
+		t.Fatalf("model-b: %v", b)
+	}
+}
+
 func TestActiveTail(t *testing.T) {
 	s, _, _ := newTestServer(t, "hang")
 	rr, _ := doJSON(t, s, "GET", "/api/runs/active/tail", nil)
