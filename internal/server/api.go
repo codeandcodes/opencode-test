@@ -180,17 +180,25 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 	jobs := runner.Pairs(req.Models, selected)
 	skipped := 0
 	if !req.Force {
-		latest, err := s.cfg.Store.Latest()
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
-		}
 		kept := jobs[:0]
 		for _, j := range jobs {
-			status := latest[j.Task.ID][j.Model].Status
-			// done/pass/fail are completed measurements; error, timeout,
-			// and interrupted runs are infrastructure failures worth retrying.
-			if status == "done" || status == "pass" || status == "fail" {
+			// A cell is complete when ANY of its runs finished with a valid
+			// measurement (done/pass/fail) — a later cancelled or errored
+			// attempt doesn't erase an earlier success. error/timeout/
+			// interrupted-only cells are infrastructure failures worth retrying.
+			history, err := s.cfg.Store.History(j.Task.ID, j.Model)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+			completed := false
+			for _, res := range history {
+				if res.Status == "done" || res.Status == "pass" || res.Status == "fail" {
+					completed = true
+					break
+				}
+			}
+			if completed {
 				skipped++
 				continue
 			}

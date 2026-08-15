@@ -204,6 +204,22 @@ func TestSkipCompletedByDefault(t *testing.T) {
 	waitIdle(t, s)
 }
 
+func TestSkipLooksAtFullHistoryNotJustLatest(t *testing.T) {
+	s, st, _ := newTestServer(t, "ok")
+	// older completed run, newer cancelled/errored run in the same cell
+	ref1, _, _ := st.NewRunDir("tetris", "model-a")
+	st.WriteResult(ref1, store.Result{Task: "tetris", Model: "model-a", Status: "done", Timestamp: ref1.Timestamp})
+	time.Sleep(1100 * time.Millisecond)
+	ref2, _, _ := st.NewRunDir("tetris", "model-a")
+	st.WriteResult(ref2, store.Result{Task: "tetris", Model: "model-a", Status: "error", Error: "cancelled", Timestamp: ref2.Timestamp})
+
+	rr, resp := doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"model-a"}, "tasks": []string{"tetris"}})
+	if rr.Code != 200 || resp["jobs"].(float64) != 0 || resp["skipped"].(float64) != 1 {
+		t.Fatalf("cell with a historical success should be skipped: %d %v", rr.Code, resp)
+	}
+}
+
 func TestErroredRunsRetryByDefault(t *testing.T) {
 	s, _, _ := newTestServer(t, "fail")
 	body := map[string]any{"models": []string{"model-a"}, "tasks": []string{"tetris"}}
