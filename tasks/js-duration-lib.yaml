@@ -1,0 +1,148 @@
+id: js-duration-lib
+title: "JS Duration Library"
+category: javascript
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory create duration.mjs (an ES module) exporting
+  four functions. The grader restores the canonical test file below and
+  runs: node --test test_duration.test.mjs
+
+  1. parse(str) -> total seconds (integer). Accepts compound durations
+     with units d, h, m, s in strictly descending order, each at most
+     once, each with a positive integer count: "1h30m", "2d", "45s",
+     "1d2h3m4s". Anything else throws Error: empty string, unknown
+     units, wrong order ("30m1h"), repeated units ("1h2h"), bare
+     numbers ("90"), decimals, negatives, whitespace.
+  2. format(totalSeconds) -> the SHORTEST compound string in the same
+     unit system, descending, omitting zero units: 5400 -> "1h30m",
+     90061 -> "1d1h1m1s", 0 -> "0s". Negative or non-integer input
+     throws Error.
+  3. add(a, b) -> format(parse(a) + parse(b)).
+  4. between(start, end) -> formatted duration between two 24h "HH:MM"
+     times on the same day: between("09:00", "17:30") -> "8h30m".
+     Equal times -> "0s". end earlier than start, or malformed times
+     (bad shape, hour > 23, minute > 59), throw Error.
+
+  Canonical test file:
+  ```javascript
+  import { test } from "node:test";
+  import assert from "node:assert/strict";
+  import { parse, format, add, between } from "./duration.mjs";
+
+  test("parse compound", () => {
+    assert.equal(parse("1h30m"), 5400);
+    assert.equal(parse("2d"), 172800);
+    assert.equal(parse("45s"), 45);
+    assert.equal(parse("1d2h3m4s"), 93784);
+  });
+
+  test("parse rejects junk", () => {
+    for (const bad of ["", "90", "1x", "30m1h", "1h2h", "1.5h", "-1h", " 1h", "1h "]) {
+      assert.throws(() => parse(bad), Error, bad);
+    }
+  });
+
+  test("format basics", () => {
+    assert.equal(format(5400), "1h30m");
+    assert.equal(format(90061), "1d1h1m1s");
+    assert.equal(format(0), "0s");
+    assert.equal(format(60), "1m");
+    assert.equal(format(86400), "1d");
+  });
+
+  test("format rejects bad input", () => {
+    assert.throws(() => format(-5), Error);
+    assert.throws(() => format(1.5), Error);
+  });
+
+  test("format round-trips parse", () => {
+    for (const s of ["1h30m", "2d", "45s", "1d2h3m4s", "1m"]) {
+      assert.equal(format(parse(s)), s);
+    }
+  });
+
+  test("add", () => {
+    assert.equal(add("1h", "30m"), "1h30m");
+    assert.equal(add("45m", "30m"), "1h15m");
+    assert.equal(add("23h", "1h"), "1d");
+  });
+
+  test("between", () => {
+    assert.equal(between("09:00", "17:30"), "8h30m");
+    assert.equal(between("00:00", "23:59"), "23h59m");
+    assert.equal(between("12:15", "12:15"), "0s");
+  });
+
+  test("between rejects bad input", () => {
+    for (const [a, b] of [["17:30", "09:00"], ["9:00", "17:00"], ["24:00", "25:00"], ["09:60", "10:00"], ["nope", "10:00"]]) {
+      assert.throws(() => between(a, b), Error, `${a}..${b}`);
+    }
+  });
+  ```
+check: |
+  set -u
+  command -v node >/dev/null || { echo "node missing"; exit 1; }
+  test -f duration.mjs || { echo "no duration.mjs"; exit 1; }
+  cat > test_duration.test.mjs <<'JSEOF'
+  import { test } from "node:test";
+  import assert from "node:assert/strict";
+  import { parse, format, add, between } from "./duration.mjs";
+
+  test("parse compound", () => {
+    assert.equal(parse("1h30m"), 5400);
+    assert.equal(parse("2d"), 172800);
+    assert.equal(parse("45s"), 45);
+    assert.equal(parse("1d2h3m4s"), 93784);
+  });
+
+  test("parse rejects junk", () => {
+    for (const bad of ["", "90", "1x", "30m1h", "1h2h", "1.5h", "-1h", " 1h", "1h "]) {
+      assert.throws(() => parse(bad), Error, bad);
+    }
+  });
+
+  test("format basics", () => {
+    assert.equal(format(5400), "1h30m");
+    assert.equal(format(90061), "1d1h1m1s");
+    assert.equal(format(0), "0s");
+    assert.equal(format(60), "1m");
+    assert.equal(format(86400), "1d");
+  });
+
+  test("format rejects bad input", () => {
+    assert.throws(() => format(-5), Error);
+    assert.throws(() => format(1.5), Error);
+  });
+
+  test("format round-trips parse", () => {
+    for (const s of ["1h30m", "2d", "45s", "1d2h3m4s", "1m"]) {
+      assert.equal(format(parse(s)), s);
+    }
+  });
+
+  test("add", () => {
+    assert.equal(add("1h", "30m"), "1h30m");
+    assert.equal(add("45m", "30m"), "1h15m");
+    assert.equal(add("23h", "1h"), "1d");
+  });
+
+  test("between", () => {
+    assert.equal(between("09:00", "17:30"), "8h30m");
+    assert.equal(between("00:00", "23:59"), "23h59m");
+    assert.equal(between("12:15", "12:15"), "0s");
+  });
+
+  test("between rejects bad input", () => {
+    for (const [a, b] of [["17:30", "09:00"], ["9:00", "17:00"], ["24:00", "25:00"], ["09:60", "10:00"], ["nope", "10:00"]]) {
+      assert.throws(() => between(a, b), Error, `${a}..${b}`);
+    }
+  });
+  JSEOF
+  out=$(node --test --test-reporter tap test_duration.test.mjs 2>&1)
+  printf '%s\n' "$out" | tail -12
+  PASS=$(printf '%s\n' "$out" | grep -oP '^# pass \K[0-9]+' | tail -1)
+  FAILN=$(printf '%s\n' "$out" | grep -oP '^# fail \K[0-9]+' | tail -1)
+  [ -z "$PASS" ] && { echo "could not parse node --test output"; exit 1; }
+  if [ "${FAILN:-0}" -gt 0 ]; then echo "$FAILN failed, $PASS passed"; exit 1; fi
+  echo "$PASS passed"

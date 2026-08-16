@@ -1,0 +1,173 @@
+id: json-pipeline
+title: "JSON Pipeline"
+category: data
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory create pipeline.py exposing
+  normalize(records: list[dict]) -> dict. It ingests messy event records
+  and produces a normalized report. The grader restores the canonical
+  test file below before running, so only pipeline.py matters. Grader
+  runs: python3 -m pytest -q test_pipeline.py
+
+  Rules for normalize():
+  1. Each input record may have keys: "user" (str), "action" (str),
+     "amount" (number or numeric string), "ts" (ISO date "YYYY-MM-DD").
+  2. Drop records missing "user" or "action", with non-numeric amount
+     (after string coercion), or with an unparseable/absent ts; count
+     them in "dropped".
+  3. User names normalize to lowercase and stripped whitespace; actions
+     normalize to lowercase.
+  4. Output dict:
+     {"users": {<user>: {"total": float, "actions": {<action>: count},
+                "first_seen": ts, "last_seen": ts}},
+      "by_month": {"YYYY-MM": float total},
+      "dropped": int}
+     Totals are rounded to 2 decimals. first_seen/last_seen are the min
+     and max ts strings for that user.
+
+  Canonical test file:
+  ```python
+  import pytest
+  from pipeline import normalize
+
+
+  RECORDS = [
+      {"user": " Ada ", "action": "BUY", "amount": "12.50", "ts": "2026-01-05"},
+      {"user": "ada", "action": "buy", "amount": 7.5, "ts": "2026-02-01"},
+      {"user": "Bob", "action": "sell", "amount": 3, "ts": "2026-01-20"},
+      {"user": "bob", "action": "SELL", "amount": "0.5", "ts": "2026-01-21"},
+      {"user": "ada", "action": "refund", "amount": "oops", "ts": "2026-01-06"},
+      {"action": "buy", "amount": 5, "ts": "2026-01-07"},
+      {"user": "cyd", "action": "buy", "amount": 9, "ts": "not-a-date"},
+      {"user": "cyd", "action": "buy", "amount": "4.25", "ts": "2026-03-09"},
+  ]
+
+
+  @pytest.fixture()
+  def out():
+      return normalize(list(RECORDS))
+
+
+  def test_dropped_count(out):
+      assert out["dropped"] == 3
+
+
+  def test_user_keys_normalized(out):
+      assert set(out["users"]) == {"ada", "bob", "cyd"}
+
+
+  def test_totals(out):
+      assert out["users"]["ada"]["total"] == 20.0
+      assert out["users"]["bob"]["total"] == 3.5
+      assert out["users"]["cyd"]["total"] == 4.25
+
+
+  def test_actions_normalized_and_counted(out):
+      assert out["users"]["ada"]["actions"] == {"buy": 2}
+      assert out["users"]["bob"]["actions"] == {"sell": 2}
+
+
+  def test_seen_range(out):
+      assert out["users"]["ada"]["first_seen"] == "2026-01-05"
+      assert out["users"]["ada"]["last_seen"] == "2026-02-01"
+      assert out["users"]["bob"]["first_seen"] == "2026-01-20"
+      assert out["users"]["bob"]["last_seen"] == "2026-01-21"
+
+
+  def test_by_month(out):
+      assert out["by_month"] == {"2026-01": 16.0, "2026-02": 7.5, "2026-03": 4.25}
+
+
+  def test_input_not_mutated():
+      records = [dict(r) for r in RECORDS]
+      normalize(records)
+      assert records == RECORDS
+
+
+  def test_empty_input():
+      assert normalize([]) == {"users": {}, "by_month": {}, "dropped": 0}
+
+
+  def test_rounding():
+      out = normalize([
+          {"user": "z", "action": "a", "amount": "0.111", "ts": "2026-05-01"},
+          {"user": "z", "action": "a", "amount": "0.222", "ts": "2026-05-02"},
+      ])
+      assert out["users"]["z"]["total"] == 0.33
+      assert out["by_month"]["2026-05"] == 0.33
+  ```
+check: |
+  set -u
+  test -f pipeline.py || { echo "no pipeline.py"; exit 1; }
+  cat > test_pipeline.py <<'PYEOF'
+  import pytest
+  from pipeline import normalize
+
+
+  RECORDS = [
+      {"user": " Ada ", "action": "BUY", "amount": "12.50", "ts": "2026-01-05"},
+      {"user": "ada", "action": "buy", "amount": 7.5, "ts": "2026-02-01"},
+      {"user": "Bob", "action": "sell", "amount": 3, "ts": "2026-01-20"},
+      {"user": "bob", "action": "SELL", "amount": "0.5", "ts": "2026-01-21"},
+      {"user": "ada", "action": "refund", "amount": "oops", "ts": "2026-01-06"},
+      {"action": "buy", "amount": 5, "ts": "2026-01-07"},
+      {"user": "cyd", "action": "buy", "amount": 9, "ts": "not-a-date"},
+      {"user": "cyd", "action": "buy", "amount": "4.25", "ts": "2026-03-09"},
+  ]
+
+
+  @pytest.fixture()
+  def out():
+      return normalize(list(RECORDS))
+
+
+  def test_dropped_count(out):
+      assert out["dropped"] == 3
+
+
+  def test_user_keys_normalized(out):
+      assert set(out["users"]) == {"ada", "bob", "cyd"}
+
+
+  def test_totals(out):
+      assert out["users"]["ada"]["total"] == 20.0
+      assert out["users"]["bob"]["total"] == 3.5
+      assert out["users"]["cyd"]["total"] == 4.25
+
+
+  def test_actions_normalized_and_counted(out):
+      assert out["users"]["ada"]["actions"] == {"buy": 2}
+      assert out["users"]["bob"]["actions"] == {"sell": 2}
+
+
+  def test_seen_range(out):
+      assert out["users"]["ada"]["first_seen"] == "2026-01-05"
+      assert out["users"]["ada"]["last_seen"] == "2026-02-01"
+      assert out["users"]["bob"]["first_seen"] == "2026-01-20"
+      assert out["users"]["bob"]["last_seen"] == "2026-01-21"
+
+
+  def test_by_month(out):
+      assert out["by_month"] == {"2026-01": 16.0, "2026-02": 7.5, "2026-03": 4.25}
+
+
+  def test_input_not_mutated():
+      records = [dict(r) for r in RECORDS]
+      normalize(records)
+      assert records == RECORDS
+
+
+  def test_empty_input():
+      assert normalize([]) == {"users": {}, "by_month": {}, "dropped": 0}
+
+
+  def test_rounding():
+      out = normalize([
+          {"user": "z", "action": "a", "amount": "0.111", "ts": "2026-05-01"},
+          {"user": "z", "action": "a", "amount": "0.222", "ts": "2026-05-02"},
+      ])
+      assert out["users"]["z"]["total"] == 0.33
+      assert out["by_month"]["2026-05"] == 0.33
+  PYEOF
+  python3 -m pytest -q test_pipeline.py

@@ -12,12 +12,12 @@ func TestRealTaskLibrary(t *testing.T) {
 	if len(lib.Warnings) != 0 {
 		t.Fatalf("task library has warnings: %v", lib.Warnings)
 	}
-	if len(lib.Tasks) != 15 {
+	if len(lib.Tasks) != 20 {
 		ids := make([]string, 0, len(lib.Tasks))
 		for _, task := range lib.Tasks {
 			ids = append(ids, task.ID)
 		}
-		t.Fatalf("got %d tasks, want 15: %v", len(lib.Tasks), ids)
+		t.Fatalf("got %d tasks, want 20: %v", len(lib.Tasks), ids)
 	}
 	reviews, checks := 0, 0
 	for _, task := range lib.Tasks {
@@ -28,7 +28,7 @@ func TestRealTaskLibrary(t *testing.T) {
 			checks++
 		}
 	}
-	if reviews != 10 || checks != 5 {
-		t.Fatalf("reviews=%d checks=%d, want 10/5", reviews, checks)
+	if reviews != 10 || checks != 10 {
+		t.Fatalf("reviews=%d checks=%d, want 10/10", reviews, checks)
 	}
 }

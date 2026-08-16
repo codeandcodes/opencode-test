@@ -1,0 +1,202 @@
+id: state-machine
+title: "Vending Machine Protocol"
+category: spec
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory create vending.py implementing this protocol
+  EXACTLY. The grader restores the canonical test file below, then runs:
+  python3 -m pytest -q test_vending.py
+
+  Spec:
+  1. class OutOfStock(Exception); class InsufficientFunds(Exception) with
+     an attribute `missing` (cents short).
+  2. VendingMachine(prices: dict[str, int], stock: dict[str, int]) —
+     prices in cents.
+  3. .balance property, starts at 0.
+  4. insert(coin): valid coins are 5, 10, 25, 100. Invalid coin raises
+     ValueError and leaves balance unchanged. Returns new balance.
+  5. select(item):
+     - unknown item -> KeyError (balance unchanged)
+     - stock[item] == 0 -> OutOfStock (balance unchanged)
+     - balance < price -> InsufficientFunds with missing = price - balance
+       (balance unchanged)
+     - success -> decrement stock, reset balance to 0, and return change
+       (balance - price) as a list of coins, greedy largest-first from
+       [100, 25, 10, 5]. Exact payment returns [].
+  6. refund(): returns the current balance as a greedy coin list (same
+     denominations) and resets balance to 0. Empty balance returns [].
+
+  Canonical test file:
+  ```python
+  import pytest
+  from vending import VendingMachine, OutOfStock, InsufficientFunds
+
+
+  @pytest.fixture()
+  def vm():
+      return VendingMachine({"cola": 150, "chips": 85}, {"cola": 2, "chips": 0})
+
+
+  def test_initial_balance(vm):
+      assert vm.balance == 0
+
+
+  def test_insert_valid(vm):
+      assert vm.insert(25) == 25
+      assert vm.insert(100) == 125
+      assert vm.balance == 125
+
+
+  def test_insert_invalid(vm):
+      vm.insert(25)
+      with pytest.raises(ValueError):
+          vm.insert(1)
+      assert vm.balance == 25
+
+
+  def test_unknown_item(vm):
+      vm.insert(100)
+      with pytest.raises(KeyError):
+          vm.select("water")
+      assert vm.balance == 100
+
+
+  def test_out_of_stock(vm):
+      vm.insert(100)
+      with pytest.raises(OutOfStock):
+          vm.select("chips")
+      assert vm.balance == 100
+
+
+  def test_insufficient_funds(vm):
+      vm.insert(100)
+      with pytest.raises(InsufficientFunds) as e:
+          vm.select("cola")
+      assert e.value.missing == 50
+      assert vm.balance == 100
+
+
+  def test_exact_payment(vm):
+      vm.insert(100)
+      vm.insert(25)
+      vm.insert(25)
+      assert vm.select("cola") == []
+      assert vm.balance == 0
+
+
+  def test_change_greedy(vm):
+      for _ in range(3):
+          vm.insert(100)
+      assert vm.select("cola") == [100, 25, 25]
+      assert vm.balance == 0
+
+
+  def test_stock_decrements(vm):
+      for _ in range(2):
+          vm.insert(100)
+          vm.insert(100)
+          vm.select("cola")
+      vm.insert(100)
+      vm.insert(100)
+      with pytest.raises(OutOfStock):
+          vm.select("cola")
+
+
+  def test_refund(vm):
+      vm.insert(100)
+      vm.insert(25)
+      vm.insert(10)
+      vm.insert(5)
+      assert vm.refund() == [100, 25, 10, 5]
+      assert vm.balance == 0
+      assert vm.refund() == []
+  ```
+check: |
+  set -u
+  test -f vending.py || { echo "no vending.py"; exit 1; }
+  cat > test_vending.py <<'PYEOF'
+  import pytest
+  from vending import VendingMachine, OutOfStock, InsufficientFunds
+
+
+  @pytest.fixture()
+  def vm():
+      return VendingMachine({"cola": 150, "chips": 85}, {"cola": 2, "chips": 0})
+
+
+  def test_initial_balance(vm):
+      assert vm.balance == 0
+
+
+  def test_insert_valid(vm):
+      assert vm.insert(25) == 25
+      assert vm.insert(100) == 125
+      assert vm.balance == 125
+
+
+  def test_insert_invalid(vm):
+      vm.insert(25)
+      with pytest.raises(ValueError):
+          vm.insert(1)
+      assert vm.balance == 25
+
+
+  def test_unknown_item(vm):
+      vm.insert(100)
+      with pytest.raises(KeyError):
+          vm.select("water")
+      assert vm.balance == 100
+
+
+  def test_out_of_stock(vm):
+      vm.insert(100)
+      with pytest.raises(OutOfStock):
+          vm.select("chips")
+      assert vm.balance == 100
+
+
+  def test_insufficient_funds(vm):
+      vm.insert(100)
+      with pytest.raises(InsufficientFunds) as e:
+          vm.select("cola")
+      assert e.value.missing == 50
+      assert vm.balance == 100
+
+
+  def test_exact_payment(vm):
+      vm.insert(100)
+      vm.insert(25)
+      vm.insert(25)
+      assert vm.select("cola") == []
+      assert vm.balance == 0
+
+
+  def test_change_greedy(vm):
+      for _ in range(3):
+          vm.insert(100)
+      assert vm.select("cola") == [100, 25, 25]
+      assert vm.balance == 0
+
+
+  def test_stock_decrements(vm):
+      for _ in range(2):
+          vm.insert(100)
+          vm.insert(100)
+          vm.select("cola")
+      vm.insert(100)
+      vm.insert(100)
+      with pytest.raises(OutOfStock):
+          vm.select("cola")
+
+
+  def test_refund(vm):
+      vm.insert(100)
+      vm.insert(25)
+      vm.insert(10)
+      vm.insert(5)
+      assert vm.refund() == [100, 25, 10, 5]
+      assert vm.balance == 0
+      assert vm.refund() == []
+  PYEOF
+  python3 -m pytest -q test_vending.py

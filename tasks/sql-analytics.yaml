@@ -1,0 +1,134 @@
+id: sql-analytics
+title: "SQL Analytics"
+category: sql
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory, write five SQLite query files — q1.sql through
+  q5.sql — against the database schema and data below. The grader builds
+  shop.db from exactly this seed, runs each file with
+  `sqlite3 shop.db < qN.sql` (default output mode: pipe-separated, no
+  headers), and diffs your output byte-for-byte against the expected
+  result, one assertion per query. Match ordering and number formatting
+  EXACTLY as specified.
+
+  Seed (the grader uses this verbatim):
+  ```sql
+  CREATE TABLE orders (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, region TEXT NOT NULL, amount REAL NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE refunds (order_id INTEGER NOT NULL REFERENCES orders(id), amount REAL NOT NULL, created_at TEXT NOT NULL);
+  INSERT INTO orders VALUES
+   (1,'ada','north',120.00,'2026-01-05'),
+   (2,'bob','south', 80.00,'2026-01-09'),
+   (3,'ada','north', 45.50,'2026-01-22'),
+   (4,'cyd','east', 200.00,'2026-02-02'),
+   (5,'bob','south', 60.00,'2026-02-11'),
+   (6,'ada','north', 90.00,'2026-02-14'),
+   (7,'dee','west', 150.00,'2026-02-20'),
+   (8,'cyd','east', 75.25,'2026-03-01'),
+   (9,'bob','south',110.00,'2026-03-08'),
+   (10,'eve','north', 55.00,'2026-03-15'),
+   (11,'ada','north', 65.00,'2026-03-21'),
+   (12,'dee','west', 40.00,'2026-04-04'),
+   (13,'cyd','east', 95.50,'2026-04-12'),
+   (14,'eve','north',130.00,'2026-04-18'),
+   (15,'bob','south', 70.00,'2026-04-25'),
+   (16,'fox','south', 25.00,'2026-04-28');
+  INSERT INTO refunds VALUES
+   (1, 20.00,'2026-01-12'),
+   (4, 50.00,'2026-02-09'),
+   (9,110.00,'2026-03-10'),
+   (14, 30.00,'2026-04-20');
+  ```
+
+  Queries (money always formatted with exactly 2 decimals via printf,
+  percentages with exactly 1 decimal):
+  1. q1.sql — Net revenue per month: order month (YYYY-MM) and the sum of
+     that month's order amounts minus refunds whose ORDER was placed in
+     that month (attribute refunds to the order's month, not the refund
+     date). Columns: month|net_revenue. Order by month ascending.
+  2. q2.sql — Top 3 customers by lifetime net spend (order totals minus
+     their refunds). Columns: customer|net_spend. Order by net spend
+     descending, customer name ascending on ties.
+  3. q3.sql — Cumulative gross revenue by order date: each distinct
+     created_at with the running total of all order amounts up to and
+     including that date. Columns: created_at|cumulative. Order by date
+     ascending.
+  4. q4.sql — Each region's share of total gross revenue as a percentage.
+     Columns: region|pct. Order by share descending, region ascending on
+     ties.
+  5. q5.sql — Customers who placed orders in at least two consecutive
+     calendar months (e.g. January and February). One column: customer.
+     Distinct, ordered ascending.
+check: |
+  set -u
+  command -v sqlite3 >/dev/null || { echo "sqlite3 missing"; exit 1; }
+  cat > /tmp/oc-seed.sql <<'SEEDEOF'
+  CREATE TABLE orders (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, region TEXT NOT NULL, amount REAL NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE refunds (order_id INTEGER NOT NULL REFERENCES orders(id), amount REAL NOT NULL, created_at TEXT NOT NULL);
+  INSERT INTO orders VALUES
+   (1,'ada','north',120.00,'2026-01-05'),
+   (2,'bob','south', 80.00,'2026-01-09'),
+   (3,'ada','north', 45.50,'2026-01-22'),
+   (4,'cyd','east', 200.00,'2026-02-02'),
+   (5,'bob','south', 60.00,'2026-02-11'),
+   (6,'ada','north', 90.00,'2026-02-14'),
+   (7,'dee','west', 150.00,'2026-02-20'),
+   (8,'cyd','east', 75.25,'2026-03-01'),
+   (9,'bob','south',110.00,'2026-03-08'),
+   (10,'eve','north', 55.00,'2026-03-15'),
+   (11,'ada','north', 65.00,'2026-03-21'),
+   (12,'dee','west', 40.00,'2026-04-04'),
+   (13,'cyd','east', 95.50,'2026-04-12'),
+   (14,'eve','north',130.00,'2026-04-18'),
+   (15,'bob','south', 70.00,'2026-04-25'),
+   (16,'fox','south', 25.00,'2026-04-28');
+  INSERT INTO refunds VALUES
+   (1, 20.00,'2026-01-12'),
+   (4, 50.00,'2026-02-09'),
+   (9,110.00,'2026-03-10'),
+   (14, 30.00,'2026-04-20');
+  SEEDEOF
+  rm -f shop.db && sqlite3 shop.db < /tmp/oc-seed.sql
+  fails=0
+  expect() { # name file expected
+    local name="$1" file="$2" want="$3" got
+    if [ ! -f "$file" ]; then echo "FAIL $name (missing $file)"; fails=$((fails+1)); return; fi
+    got=$(sqlite3 shop.db < "$file" 2>/dev/null)
+    if [ "$got" != "$want" ]; then
+      echo "FAIL $name"; echo "--- want ---"; printf '%s\n' "$want"
+      echo "--- got ----"; printf '%s\n' "$got"; fails=$((fails+1))
+    fi
+  }
+  expect q1 q1.sql '2026-01|225.50
+  2026-02|450.00
+  2026-03|195.25
+  2026-04|330.50'
+  expect q2 q2.sql 'cyd|320.75
+  ada|300.50
+  bob|210.00'
+  expect q3 q3.sql '2026-01-05|120.00
+  2026-01-09|200.00
+  2026-01-22|245.50
+  2026-02-02|445.50
+  2026-02-11|505.50
+  2026-02-14|595.50
+  2026-02-20|745.50
+  2026-03-01|820.75
+  2026-03-08|930.75
+  2026-03-15|985.75
+  2026-03-21|1050.75
+  2026-04-04|1090.75
+  2026-04-12|1186.25
+  2026-04-18|1316.25
+  2026-04-25|1386.25
+  2026-04-28|1411.25'
+  expect q4 q4.sql 'north|35.8
+  east|26.3
+  south|24.4
+  west|13.5'
+  expect q5 q5.sql 'ada
+  bob
+  cyd
+  eve'
+  if [ $fails -gt 0 ]; then echo "$fails assertion(s) failed"; exit 1; fi
+  echo "all assertions passed"

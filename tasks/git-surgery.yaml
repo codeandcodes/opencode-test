@@ -1,0 +1,58 @@
+id: git-surgery
+title: "Git Surgery"
+category: tooling
+type: check
+timeout_minutes: 45
+prompt: |
+  In the working directory, create a subdirectory `repo`, initialize a
+  git repository in it, and perform this exact sequence of operations.
+  Configure any user.name/user.email you like. The grader inspects the
+  final repository state, so the end state must match precisely.
+
+  1. On branch `main`: create `app.txt` containing exactly the line
+     `v1`, commit with message `init`.
+  2. Still on `main`: change `app.txt` to contain exactly the line `v2`,
+     commit with message `update app`.
+  3. Create branch `feature` starting from the FIRST commit (`init`).
+     On it, change `app.txt` to contain two lines: `v1` then `feature`.
+     Commit with message `add feature`.
+  4. Switch to `main` and cherry-pick the `add feature` commit. This
+     conflicts; resolve so `app.txt` contains exactly two lines: `v2`
+     then `feature`. Keep the message `add feature`.
+  5. Create branch `hotfix` from `main`; on it add a new file
+     `hotfix.txt` containing exactly `H`, commit with message `hotfix`.
+  6. Switch to `main` and merge `hotfix` with a merge commit (no
+     fast-forward), message `merge hotfix`.
+
+  Final expectations: `main` is checked out; its history has 5 commits
+  (init, update app, add feature, hotfix, merge hotfix); the merge
+  commit has two parents; branch `feature` still exists with its own
+  `add feature` commit; `app.txt` on main is `v2` + `feature`;
+  `hotfix.txt` is `H`.
+check: |
+  set -u
+  cd repo 2>/dev/null || { echo "no repo directory"; exit 1; }
+  git rev-parse --git-dir >/dev/null 2>&1 || { echo "repo is not a git repository"; exit 1; }
+  fails=0
+  chk() { local name="$1" want="$2" got="$3"
+    [ "$got" = "$want" ] || { echo "FAIL $name: want '$want' got '$got'"; fails=$((fails+1)); }; }
+  chk branch main "$(git branch --show-current)"
+  chk app-content 'v2
+  feature' "$(cat app.txt 2>/dev/null)"
+  chk hotfix-content H "$(cat hotfix.txt 2>/dev/null)"
+  chk main-count 5 "$(git rev-list --count HEAD)"
+  chk head-message 'merge hotfix' "$(git log -1 --format=%s HEAD)"
+  chk messages 'add feature
+  hotfix
+  init
+  merge hotfix
+  update app' "$(git log --format=%s HEAD | sort)"
+  chk merge-parents 2 "$(git rev-list --parents -n1 HEAD | wc -w | awk '{print $1-1}')"
+  chk feature-exists 1 "$(git branch --list feature | wc -l | tr -d ' ')"
+  chk feature-tip 'add feature' "$(git log --format=%s -n1 feature)"
+  chk feature-count 2 "$(git rev-list --count feature)"
+  chk feature-app 'v1
+  feature' "$(git show feature:app.txt 2>/dev/null)"
+  chk distinct-picks yes "$([ "$(git rev-parse feature)" != "$(git log --format=%H --grep='^add feature$' HEAD | head -1)" ] && echo yes || echo no)"
+  if [ $fails -gt 0 ]; then echo "$fails assertion(s) failed"; exit 1; fi
+  echo "all assertions passed"
