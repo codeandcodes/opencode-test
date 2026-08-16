@@ -39,7 +39,7 @@
             <th title="check cells passed / attempted">Checks</th>
             <th>Pass rate</th>
             <th title="review cells with a completed build">Reviews built</th>
-            <th title="your verdicts on review runs">Verdicts</th>
+            <th title="average of your 1-10 ratings on review runs">Rating</th>
             <th title="median generation speed across cells">t/s (median)</th>
             <th title="cells whose latest run hit an infrastructure failure">Errors</th>
             <th>Samples</th>
@@ -53,9 +53,15 @@
               <td class="pct">{pct(row)}</td>
               <td>{row.reviews_done}</td>
               <td>
-                {#if row.verdict_good}👍{row.verdict_good}{/if}
-                {#if row.verdict_bad}👎{row.verdict_bad}{/if}
-                {#if !row.verdict_good && !row.verdict_bad}<span class="muted">—</span>{/if}
+                {#if row.rating_count > 0}
+                  {row.rating_avg.toFixed(1)}
+                  <span class="muted">(n={row.rating_count})</span>
+                {:else if row.verdict_good || row.verdict_bad}
+                  {#if row.verdict_good}👍{row.verdict_good}{/if}
+                  {#if row.verdict_bad}👎{row.verdict_bad}{/if}
+                {:else}
+                  <span class="muted">—</span>
+                {/if}
               </td>
               <td>{row.median_tps > 0 ? row.median_tps.toFixed(1) : "—"}</td>
               <td class={row.errors > 0 ? "warn" : ""}>{row.errors}</td>
@@ -66,8 +72,8 @@
       </table>
     </div>
     <p class="muted note">
-      Ranked by check cells passed. Review columns need your verdicts (👍/👎
-      on run pages) to become comparable.
+      Ranked by check cells passed. The Rating column averages your 1-10
+      judgments from the Review tab — rate more runs to sharpen it.
     </p>
   {/if}
 </div>

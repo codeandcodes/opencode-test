@@ -105,8 +105,10 @@ type leaderboardRow struct {
 	CheckCells       int     `json:"check_cells"`        // check cells with ≥1 completed sample
 	CheckCellsPassed int     `json:"check_cells_passed"` // of those, cells with ≥1 pass
 	ReviewsDone      int     `json:"reviews_done"`       // review cells with ≥1 completed sample
-	VerdictGood      int     `json:"verdict_good"`
+	VerdictGood      int     `json:"verdict_good"`       // legacy binary verdicts
 	VerdictBad       int     `json:"verdict_bad"`
+	RatingCount      int     `json:"rating_count"`
+	RatingAvg        float64 `json:"rating_avg"`
 	Errors           int     `json:"errors"` // cells whose latest run is an infrastructure failure
 	MedianTps        float64 `json:"median_tps"`
 	Samples          int     `json:"samples"`
@@ -135,6 +137,8 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 			row.Samples += agg.Samples
 			row.VerdictGood += agg.VerdictGood
 			row.VerdictBad += agg.VerdictBad
+			row.RatingCount += agg.RatingCount
+			row.RatingAvg += agg.RatingAvg * float64(agg.RatingCount) // sum for now; divided below
 			if agg.MedianTps > 0 {
 				tpsSamples[model] = append(tpsSamples[model], agg.MedianTps)
 			}
@@ -156,6 +160,9 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]leaderboardRow, 0, len(rows))
 	for model, row := range rows {
+		if row.RatingCount > 0 {
+			row.RatingAvg /= float64(row.RatingCount)
+		}
 		if tps := tpsSamples[model]; len(tps) > 0 {
 			sort.Float64s(tps)
 			mid := len(tps) / 2

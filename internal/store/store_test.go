@@ -101,16 +101,21 @@ func TestAggregate(t *testing.T) {
 		{Status: "done", FinishedAt: now, Verdict: &Verdict{Verdict: "good"}},
 		{Status: "done", FinishedAt: now, Verdict: &Verdict{Verdict: "bad"}},
 		{Status: "done", FinishedAt: now},
+		{Status: "done", FinishedAt: now, Verdict: &Verdict{Rating: 8}},
+		{Status: "done", FinishedAt: now, Verdict: &Verdict{Rating: 3}},
 	}
 	agg := Aggregate(h)
-	if agg.Samples != 6 { // pass+fail+pass+done×3
+	if agg.Samples != 8 { // pass+fail+pass+done×5
 		t.Fatalf("samples = %d", agg.Samples)
 	}
-	if agg.Passes != 2 || agg.Fails != 1 || agg.Dones != 3 {
+	if agg.Passes != 2 || agg.Fails != 1 || agg.Dones != 5 {
 		t.Fatalf("counts: %+v", agg)
 	}
 	if agg.VerdictGood != 1 || agg.VerdictBad != 1 {
 		t.Fatalf("verdicts: %+v", agg)
+	}
+	if agg.RatingCount != 2 || agg.RatingAvg < 5.49 || agg.RatingAvg > 5.51 {
+		t.Fatalf("ratings: count=%d avg=%v want 2/5.5", agg.RatingCount, agg.RatingAvg)
 	}
 	// tps samples: 50, 80, 20 -> median 50
 	if agg.MedianTps < 49.9 || agg.MedianTps > 50.1 {
@@ -141,6 +146,22 @@ func TestVerdicts(t *testing.T) {
 
 	if err := st.WriteVerdict(ref, Verdict{Verdict: "meh"}); err == nil {
 		t.Fatal("invalid verdict accepted")
+	}
+	// ratings: 1-10 valid, others rejected
+	if err := st.WriteVerdict(ref, Verdict{Rating: 7, Note: "solid but no undo"}); err != nil {
+		t.Fatalf("rating verdict rejected: %v", err)
+	}
+	m2, _ := st.Latest()
+	if v := m2["tetris"]["m"].Verdict; v == nil || v.Rating != 7 {
+		t.Fatalf("rating not attached: %+v", v)
+	}
+	for _, bad := range []int{-1, 11, 100} {
+		if err := st.WriteVerdict(ref, Verdict{Rating: bad}); err == nil {
+			t.Fatalf("rating %d accepted", bad)
+		}
+	}
+	if err := st.WriteVerdict(ref, Verdict{}); err == nil {
+		t.Fatal("empty verdict accepted")
 	}
 	if err := st.ClearVerdict(ref); err != nil {
 		t.Fatal(err)

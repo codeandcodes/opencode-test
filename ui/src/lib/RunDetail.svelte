@@ -1,6 +1,7 @@
 <script lang="ts">
   import { clearVerdict, getFiles, getHistory, getRun, setVerdict } from "./api";
-  import { fmtCheckScore, fmtTokens, fmtTps } from "./fmt";
+  import { fmtCheckScore, fmtTokens, fmtTps, ratingBand } from "./fmt";
+  import RatingStrip from "./RatingStrip.svelte";
   import FileTree from "./FileTree.svelte";
   import Preview from "./Preview.svelte";
   import StatusChip from "./StatusChip.svelte";
@@ -48,10 +49,10 @@
   let verdictNote = $state("");
   let verdictError = $state("");
 
-  async function judge(v: "good" | "bad") {
+  async function rate(rating: number) {
     verdictError = "";
     try {
-      const saved = await setVerdict(ref, v, verdictNote.trim());
+      const saved = await setVerdict(ref, rating, verdictNote.trim());
       if (detail) detail = { ...detail, result: { ...detail.result, verdict: saved } };
     } catch (e) {
       verdictError = e instanceof Error ? e.message : String(e);
@@ -141,15 +142,21 @@
 
     <div class="verdict-bar">
       {#if result.verdict}
-        <span class="verdict verdict-{result.verdict.verdict}">
-          {result.verdict.verdict === "good" ? "👍 good" : "👎 bad"}
-        </span>
+        {#if result.verdict.rating}
+          <span class="verdict rated rated-{ratingBand(result.verdict.rating)}">
+            {result.verdict.rating}/10
+          </span>
+        {:else}
+          <span class="verdict">
+            {result.verdict.verdict === "good" ? "👍 good" : "👎 bad"}
+            <span class="k">(legacy — re-rate below)</span>
+          </span>
+        {/if}
         {#if result.verdict.note}<span class="note">{result.verdict.note}</span>{/if}
         <button class="linkish" onclick={unjudge}>clear</button>
       {:else}
-        <span class="k">your verdict:</span>
-        <button onclick={() => judge("good")}>👍 good</button>
-        <button onclick={() => judge("bad")}>👎 bad</button>
+        <span class="k">rate this result — 1 non-functional · 10 perfect:</span>
+        <RatingStrip onrate={rate} />
         <input
           type="text"
           placeholder="note (optional)"
@@ -307,10 +314,20 @@
   .verdict {
     font-weight: 600;
   }
-  .verdict-good {
-    color: var(--green, #3fb950);
+  .rated {
+    font-family: var(--mono);
+    background: var(--well, #141210);
+    border-radius: 5px;
+    padding: 0.15rem 0.55rem;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
   }
-  .verdict-bad {
+  .rated-high {
+    color: var(--green, #5cb8a0);
+  }
+  .rated-mid {
+    color: var(--accent);
+  }
+  .rated-low {
     color: var(--red);
   }
   .verdict-bar .note {

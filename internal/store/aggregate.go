@@ -8,8 +8,10 @@ type CellAgg struct {
 	Passes      int     `json:"passes"`
 	Fails       int     `json:"fails"`
 	Dones       int     `json:"dones"`
-	VerdictGood int     `json:"verdict_good"`
+	VerdictGood int     `json:"verdict_good"` // legacy binary verdicts
 	VerdictBad  int     `json:"verdict_bad"`
+	RatingCount int     `json:"rating_count"`
+	RatingAvg   float64 `json:"rating_avg"`
 	MedianTps   float64 `json:"median_tps"`
 }
 
@@ -31,17 +33,25 @@ func Aggregate(history []Result) CellAgg {
 		}
 		agg.Samples++
 		if r.Verdict != nil {
-			switch r.Verdict.Verdict {
-			case "good":
-				agg.VerdictGood++
-			case "bad":
-				agg.VerdictBad++
+			if r.Verdict.Rating > 0 {
+				agg.RatingCount++
+				agg.RatingAvg += float64(r.Verdict.Rating)
+			} else {
+				switch r.Verdict.Verdict {
+				case "good":
+					agg.VerdictGood++
+				case "bad":
+					agg.VerdictBad++
+				}
 			}
 		}
 		out := r.TokensOut + r.TokensReasoning
 		if r.GenSeconds > 0 && out > 0 {
 			tps = append(tps, float64(out)/r.GenSeconds)
 		}
+	}
+	if agg.RatingCount > 0 {
+		agg.RatingAvg /= float64(agg.RatingCount)
 	}
 	if len(tps) > 0 {
 		sort.Float64s(tps)

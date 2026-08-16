@@ -59,7 +59,10 @@ export interface Provenance {
 }
 
 export interface Verdict {
-  verdict: "good" | "bad";
+  /** 1-10 (10 = perfect, 1 = completely non-functional); absent on legacy verdicts */
+  rating?: number;
+  /** legacy binary judgment */
+  verdict?: "good" | "bad";
   note?: string;
   at: string;
 }
@@ -82,6 +85,8 @@ export interface CellAgg {
   dones: number;
   verdict_good: number;
   verdict_bad: number;
+  rating_count: number;
+  rating_avg: number;
   median_tps: number;
 }
 

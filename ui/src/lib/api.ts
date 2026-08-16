@@ -104,6 +104,8 @@ export interface LeaderboardRow {
   reviews_done: number;
   verdict_good: number;
   verdict_bad: number;
+  rating_count: number;
+  rating_avg: number;
   errors: number;
   median_tps: number;
   samples: number;
@@ -170,13 +172,13 @@ export function dismissResumable(): Promise<void> {
 
 export function setVerdict(
   ref: RunRef,
-  verdict: "good" | "bad",
+  rating: number,
   note: string,
 ): Promise<Verdict> {
   return request(`${runBase(ref)}/verdict`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ verdict, note }),
+    body: JSON.stringify({ rating, note }),
   });
 }
 

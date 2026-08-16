@@ -24,6 +24,13 @@ export function genTps(r: Result): number | null {
   return out / r.gen_seconds;
 }
 
+/** Color band for a 1-10 rating: high ≥7, low ≤3, mid between. */
+export function ratingBand(rating: number): "high" | "mid" | "low" {
+  if (rating >= 7) return "high";
+  if (rating <= 3) return "low";
+  return "mid";
+}
+
 /** "9✓" | "2✗" | "8✓ 1✗" — empty string when no counts were parsed. */
 export function fmtCheckScore(r: Result): string {
   if (!r.check_parsed) return "";

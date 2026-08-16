@@ -10,7 +10,7 @@
     type ResumableBatch,
   } from "./api";
   import type { Result } from "./types";
-  import { fmtCheckScore, fmtTokens, fmtTps, genTokens } from "./fmt";
+  import { fmtCheckScore, fmtTokens, fmtTps, genTokens, ratingBand } from "./fmt";
   import LivePanel from "./LivePanel.svelte";
   import RunControl from "./RunControl.svelte";
   import StatusChip from "./StatusChip.svelte";
@@ -27,6 +27,8 @@
     const parts = [`n=${a.samples}`];
     if (type === "check") {
       parts.push(`${a.passes}✓ ${a.fails}✗`);
+    } else if (a.rating_count > 0) {
+      parts.push(`avg ${a.rating_avg.toFixed(1)}`);
     } else if (a.verdict_good + a.verdict_bad > 0) {
       const v: string[] = [];
       if (a.verdict_good) v.push(`👍${a.verdict_good}`);
@@ -150,6 +152,8 @@
   function modelSummary(id: string): string {
     let passCells = 0;
     let checkCells = 0;
+    let ratingSum = 0;
+    let ratingCount = 0;
     let good = 0;
     let bad = 0;
     for (const t of tasks) {
@@ -159,11 +163,14 @@
         checkCells++;
         if (a.passes > 0) passCells++;
       }
+      ratingSum += a.rating_avg * a.rating_count;
+      ratingCount += a.rating_count;
       good += a.verdict_good;
       bad += a.verdict_bad;
     }
     const parts: string[] = [];
     if (checkCells) parts.push(`${passCells}/${checkCells}✓`);
+    if (ratingCount) parts.push(`avg ${(ratingSum / ratingCount).toFixed(1)}`);
     if (good) parts.push(`👍${good}`);
     if (bad) parts.push(`👎${bad}`);
     return parts.join(" · ");
@@ -305,12 +312,21 @@
                           </span>
                         {/if}
                         {#if r.verdict}
-                          <span
-                            class="verdict-icon"
-                            title={r.verdict.note || r.verdict.verdict}
-                          >
-                            {r.verdict.verdict === "good" ? "👍" : "👎"}
-                          </span>
+                          {#if r.verdict.rating}
+                            <span
+                              class="rating-badge rb-{ratingBand(r.verdict.rating)}"
+                              title={r.verdict.note || `rated ${r.verdict.rating}/10`}
+                            >
+                              {r.verdict.rating}
+                            </span>
+                          {:else}
+                            <span
+                              class="verdict-icon"
+                              title={r.verdict.note || r.verdict.verdict}
+                            >
+                              {r.verdict.verdict === "good" ? "👍" : "👎"}
+                            </span>
+                          {/if}
                         {/if}
                         <span class="dur">{fmtDuration(r.duration_sec)}</span>
                         {#if fmtCheckScore(r)}
@@ -410,6 +426,23 @@
   }
   .verdict-icon {
     font-size: 0.8rem;
+  }
+  .rating-badge {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    background: var(--well, #141210);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+  }
+  .rb-high {
+    color: var(--green, #5cb8a0);
+  }
+  .rb-mid {
+    color: var(--accent);
+  }
+  .rb-low {
+    color: var(--red);
   }
   .resume-banner {
     display: flex;

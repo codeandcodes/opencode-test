@@ -7,6 +7,7 @@
     previewUrl,
     setVerdict,
   } from "./api";
+  import RatingStrip from "./RatingStrip.svelte";
   import type { Matrix, Model, RunRef, TaskSummary } from "./types";
 
   let pending = $state<RunRef[]>([]);
@@ -56,10 +57,10 @@
       .sort((a, b) => a.model.localeCompare(b.model));
   });
 
-  async function judge(ref: RunRef, verdict: "good" | "bad") {
+  async function judge(ref: RunRef, rating: number) {
     error = "";
     try {
-      await setVerdict(ref, verdict, note.trim());
+      await setVerdict(ref, rating, note.trim());
       note = "";
       pending = pending.filter(
         (p) =>
@@ -85,8 +86,8 @@
     const t = e.target as HTMLElement;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
     if (!current) return;
-    if (e.key === "g") judge(current, "good");
-    else if (e.key === "b") judge(current, "bad");
+    if (e.key >= "1" && e.key <= "9") judge(current, Number(e.key));
+    else if (e.key === "0") judge(current, 10);
     else if (e.key === "n") skip();
   }
 
@@ -109,7 +110,9 @@
       <input type="checkbox" bind:checked={gallery} />
       gallery (all models, current task)
     </label>
-    <span class="keys">keys: <kbd>g</kbd> good · <kbd>b</kbd> bad · <kbd>n</kbd> next</span>
+    <span class="keys">
+      keys: <kbd>1</kbd>–<kbd>9</kbd> rate · <kbd>0</kbd> = 10 · <kbd>n</kbd> next
+    </span>
   </header>
 
   {#if error}<p class="error">{error}</p>{/if}
@@ -131,7 +134,9 @@
               {names[run.model] ?? run.model}
             </span>
             {#if v}
-              <span class="badge">{v.verdict === "good" ? "👍" : "👎"}</span>
+              <span class="badge">
+                {v.rating ? `${v.rating}/10` : v.verdict === "good" ? "👍" : "👎"}
+              </span>
             {/if}
             <a
               class="link"
@@ -155,8 +160,7 @@
           ></iframe>
           {#if !v}
             <div class="card-actions">
-              <button onclick={() => judge(run, "good")}>👍 good</button>
-              <button onclick={() => judge(run, "bad")}>👎 bad</button>
+              <RatingStrip compact onrate={(rating) => judge(run, rating)} />
             </div>
           {/if}
         </div>
@@ -189,16 +193,11 @@
         src={previewUrl(current, "index.html")}
       ></iframe>
       <div class="actions">
-        <button class="good" onclick={() => judge(current, "good")}>
-          👍 good (g)
-        </button>
-        <button class="bad" onclick={() => judge(current, "bad")}>
-          👎 bad (b)
-        </button>
+        <RatingStrip onrate={(rating) => judge(current, rating)} />
         <button onclick={skip}>skip (n)</button>
         <input
           type="text"
-          placeholder="note (optional, saved with verdict)"
+          placeholder="note (optional, saved with rating)"
           bind:value={note}
         />
       </div>

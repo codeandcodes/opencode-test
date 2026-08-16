@@ -384,6 +384,18 @@ func TestVerdictLifecycle(t *testing.T) {
 	if rr.Code != 400 {
 		t.Fatalf("invalid verdict = %d", rr.Code)
 	}
+	rr, _ = doJSON(t, s, "POST", base+"/verdict", map[string]any{"rating": 7, "note": "mostly works"})
+	if rr.Code != 200 {
+		t.Fatalf("rating verdict = %d %s", rr.Code, rr.Body.String())
+	}
+	_, detail = doJSON(t, s, "GET", base, nil)
+	if v := detail["result"].(map[string]any)["verdict"]; v == nil || v.(map[string]any)["rating"].(float64) != 7 {
+		t.Fatalf("rating not in detail: %v", v)
+	}
+	rr, _ = doJSON(t, s, "POST", base+"/verdict", map[string]any{"rating": 12})
+	if rr.Code != 400 {
+		t.Fatalf("out-of-range rating = %d", rr.Code)
+	}
 	rr, _ = doJSON(t, s, "POST", "/api/runs/tetris/model-a/2020-01-01T00-00-00Z/verdict", map[string]any{"verdict": "good"})
 	if rr.Code != 404 {
 		t.Fatalf("verdict on missing run = %d", rr.Code)
@@ -445,10 +457,17 @@ func TestLeaderboard(t *testing.T) {
 			st.WriteVerdict(ref, store.Verdict{Verdict: verdict})
 		}
 	}
-	// model-a: 2 check cells (1 pass, 1 fail), 1 review judged good
+	writeRated := func(task, model string, rating int) {
+		ref, _, _ := st.NewRunDir(task, model)
+		st.WriteResult(ref, store.Result{Task: task, Model: model, Status: "done", Timestamp: ref.Timestamp})
+		st.WriteVerdict(ref, store.Verdict{Rating: rating})
+	}
+	// model-a: 2 check cells (1 pass, 1 fail), 1 review judged good, 2 rated
 	write("chk1", "model-a", "pass", 50, "")
 	write("chk2", "model-a", "fail", 70, "")
 	write("rev1", "model-a", "done", 60, "good")
+	writeRated("rev2", "model-a", 9)
+	writeRated("rev3", "model-a", 5)
 	// model-b: 1 check pass, 1 review judged bad, 1 error
 	write("chk1", "model-b", "pass", 100, "")
 	write("rev1", "model-b", "done", 90, "bad")
@@ -468,8 +487,11 @@ func TestLeaderboard(t *testing.T) {
 	if a["check_cells_passed"].(float64) != 1 || a["check_cells"].(float64) != 2 {
 		t.Fatalf("model-a checks: %v", a)
 	}
-	if a["verdict_good"].(float64) != 1 || a["reviews_done"].(float64) != 1 {
+	if a["verdict_good"].(float64) != 1 || a["reviews_done"].(float64) != 3 {
 		t.Fatalf("model-a reviews: %v", a)
+	}
+	if a["rating_count"].(float64) != 2 || a["rating_avg"].(float64) != 7 {
+		t.Fatalf("model-a ratings: %v", a)
 	}
 	if tps := a["median_tps"].(float64); tps < 59 || tps > 61 {
 		t.Fatalf("model-a tps: %v", tps)

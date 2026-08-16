@@ -53,9 +53,12 @@ type Result struct {
 	Verdict *Verdict `json:"verdict,omitempty"`
 }
 
-// Verdict records a human judgment of a run.
+// Verdict records a human judgment of a run: a 1-10 rating (10 = perfect,
+// 1 = completely non-functional). The legacy binary good/bad form is still
+// readable and writable for old recordings.
 type Verdict struct {
-	Verdict string    `json:"verdict"` // good | bad
+	Rating  int       `json:"rating,omitempty"`  // 1..10; 0 means legacy verdict
+	Verdict string    `json:"verdict,omitempty"` // legacy: good | bad
 	Note    string    `json:"note,omitempty"`
 	At      time.Time `json:"at"`
 }
@@ -164,8 +167,16 @@ func (s *Store) ReadResultFull(ref RunRef) (Result, error) {
 
 // WriteVerdict records a human judgment for a run.
 func (s *Store) WriteVerdict(ref RunRef, v Verdict) error {
-	if v.Verdict != "good" && v.Verdict != "bad" {
-		return fmt.Errorf("verdict must be good or bad, got %q", v.Verdict)
+	switch {
+	case v.Rating != 0:
+		if v.Rating < 1 || v.Rating > 10 {
+			return fmt.Errorf("rating must be 1-10, got %d", v.Rating)
+		}
+		v.Verdict = "" // a rating supersedes the legacy field
+	case v.Verdict == "good" || v.Verdict == "bad":
+		// legacy form, accepted as-is
+	default:
+		return fmt.Errorf("verdict needs a rating (1-10) or legacy good/bad")
 	}
 	if v.At.IsZero() {
 		v.At = time.Now().UTC()
