@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -128,6 +129,15 @@ func (r *Runner) clearState() {
 	if r.StateFile != "" {
 		os.Remove(r.StateFile)
 	}
+}
+
+// modelArg maps a model ID to opencode's provider/model form. Bare IDs are
+// llama-swap models; IDs already containing a provider pass through.
+func modelArg(model string) string {
+	if strings.Contains(model, "/") {
+		return model
+	}
+	return "llama-swap/" + model
 }
 
 func minDuration(a, b time.Duration) time.Duration {
@@ -296,7 +306,7 @@ func (r *Runner) runJob(ctx context.Context, j JobSpec) string {
 	defer stderrFile.Close()
 
 	cmd := exec.Command(r.opencode, "run",
-		"--dir", ws, "-m", "llama-swap/"+j.Model, "--format", "json", "--auto", j.Task.Prompt)
+		"--dir", ws, "-m", modelArg(j.Model), "--format", "json", "--auto", j.Task.Prompt)
 	cmd.Stdout = eventsFile
 	cmd.Stderr = stderrFile
 	cmd.Env = r.Env

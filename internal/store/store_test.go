@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -172,6 +173,33 @@ func TestVerdicts(t *testing.T) {
 	}
 	if err := st.ClearVerdict(ref); err != nil {
 		t.Fatalf("clearing absent verdict should be idempotent: %v", err)
+	}
+}
+
+func TestSlashModelIDs(t *testing.T) {
+	st := New(t.TempDir())
+	ref, ws, err := st.NewRunDir("tetris", "opencode/deepseek-v4-flash-free")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(st.RunPath(ref), "opencode/deepseek") {
+		t.Fatalf("model dir not encoded: %s", st.RunPath(ref))
+	}
+	if _, err := os.Stat(ws); err != nil {
+		t.Fatal(err)
+	}
+	st.WriteResult(ref, Result{Task: "tetris", Model: "opencode/deepseek-v4-flash-free",
+		Status: "done", Timestamp: ref.Timestamp})
+	m, err := st.Latest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m["tetris"]["opencode/deepseek-v4-flash-free"]; !ok {
+		t.Fatalf("latest keys not decoded: %v", m["tetris"])
+	}
+	h, _ := st.History("tetris", "opencode/deepseek-v4-flash-free")
+	if len(h) != 1 {
+		t.Fatalf("history via slash id = %d", len(h))
 	}
 }
 

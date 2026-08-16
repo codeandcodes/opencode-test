@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"opencode-bench/internal/config"
@@ -239,8 +240,23 @@ func (s *Server) handleVerdictClear(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+func (s *Server) allModels() ([]config.Model, error) {
 	models, err := config.DiscoverModels(s.cfg.OpencodeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	for _, extra := range s.cfg.ExtraModels {
+		id, name, found := strings.Cut(extra, "=")
+		if !found {
+			name = id
+		}
+		models = append(models, config.Model{ID: id, Name: name})
+	}
+	return models, nil
+}
+
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	models, err := s.allModels()
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err)
 		return
@@ -313,7 +329,7 @@ func (s *Server) handleRunsStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("models and tasks must be non-empty"))
 		return
 	}
-	models, err := config.DiscoverModels(s.cfg.OpencodeConfigPath)
+	models, err := s.allModels()
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err)
 		return

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,6 +16,19 @@ import (
 	"opencode-bench/internal/store"
 )
 
+func extraModelList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, m := range strings.Split(s, ",") {
+		if m = strings.TrimSpace(m); m != "" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 func main() {
 	home, _ := os.UserHomeDir()
 	listen := flag.String("listen", "127.0.0.1:7777", "listen address")
@@ -22,6 +36,7 @@ func main() {
 	tasksDir := flag.String("tasks", "tasks", "task library directory")
 	runsDir := flag.String("runs", "runs", "runs output directory")
 	ocbin := flag.String("opencode", "opencode", "opencode binary")
+	extraModels := flag.String("extra-models", "", "comma-separated provider-qualified reference models, e.g. opencode/x=Name")
 	lsCfg := flag.String("llama-swap-config", "", "path to llama-swap YAML config; when set, each run snapshots the model's serving entry into its provenance")
 	idleMin := flag.Int("idle-timeout", 10, "kill a job when its event stream is silent this many minutes (0 disables)")
 	flag.Parse()
@@ -38,6 +53,7 @@ func main() {
 		RunsDir:            *runsDir,
 		OpencodeBin:        *ocbin,
 		BatchStateFile:     stateFile,
+		ExtraModels:        extraModelList(*extraModels),
 		Store:              st,
 		Runner:             run,
 	})

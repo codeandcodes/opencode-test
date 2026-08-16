@@ -17,8 +17,12 @@ type Config struct {
 	// BatchStateFile is where the runner persists its pending job list;
 	// the server reads it to offer resume of interrupted batches.
 	BatchStateFile string
-	Store          *store.Store
-	Runner         *runner.Runner
+	// ExtraModels are provider-qualified reference models (e.g. a free
+	// hosted model) benchmarked alongside the llama-swap fleet. Each entry
+	// is "provider/model" or "provider/model=Display Name".
+	ExtraModels []string
+	Store       *store.Store
+	Runner      *runner.Runner
 }
 
 type Server struct {

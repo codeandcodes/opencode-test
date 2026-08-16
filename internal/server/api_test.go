@@ -410,6 +410,35 @@ func TestVerdictLifecycle(t *testing.T) {
 	}
 }
 
+func TestExtraModels(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	s.cfg.ExtraModels = []string{"opencode/deepseek-v4-flash-free=DeepSeek v4 Flash (free)"}
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/api/models", nil))
+	var models []map[string]string
+	json.Unmarshal(rr.Body.Bytes(), &models)
+	found := false
+	for _, m := range models {
+		if m["id"] == "opencode/deepseek-v4-flash-free" && m["name"] == "DeepSeek v4 Flash (free)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("extra model missing: %v", models)
+	}
+	rr2, resp := doJSON(t, s, "POST", "/api/runs", map[string]any{
+		"models": []string{"opencode/deepseek-v4-flash-free"}, "tasks": []string{"tetris"}})
+	if rr2.Code != 202 || resp["jobs"].(float64) != 1 {
+		t.Fatalf("extra model batch: %d %v", rr2.Code, resp)
+	}
+	waitIdle(t, s)
+	_, matrix := doJSON(t, s, "GET", "/api/runs", nil)
+	cell := matrix["matrix"].(map[string]any)["tetris"].(map[string]any)["opencode/deepseek-v4-flash-free"]
+	if cell == nil || cell.(map[string]any)["status"] != "done" {
+		t.Fatalf("extra model cell: %v", cell)
+	}
+}
+
 func TestReviewsPending(t *testing.T) {
 	s, st, _ := newTestServer(t, "ok")
 	write := func(task, model, status, verdict string) {

@@ -81,6 +81,18 @@ type Store struct{ root string }
 
 func New(root string) *Store { return &Store{root: root} }
 
+// Model IDs may contain a provider prefix ("opencode/model"); the slash is
+// encoded for the on-disk directory name and decoded when scanning.
+const modelSlashEncoding = "__"
+
+func encodeModel(model string) string {
+	return strings.ReplaceAll(model, "/", modelSlashEncoding)
+}
+
+func decodeModel(dir string) string {
+	return strings.ReplaceAll(dir, modelSlashEncoding, "/")
+}
+
 // timestamp layout: RFC3339 with colons replaced so it is filesystem-safe
 // everywhere and still sorts lexicographically by time.
 const tsLayout = "2006-01-02T15-04-05Z"
@@ -91,7 +103,7 @@ const tsLayout = "2006-01-02T15-04-05Z"
 // bare name, preserving chronological ordering).
 func (s *Store) NewRunDir(task, model string) (RunRef, string, error) {
 	base := time.Now().UTC().Format(tsLayout)
-	if err := os.MkdirAll(filepath.Join(s.root, task, model), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(s.root, task, encodeModel(model)), 0o755); err != nil {
 		return RunRef{}, "", err
 	}
 	for i := 0; ; i++ {
@@ -116,7 +128,7 @@ func (s *Store) NewRunDir(task, model string) (RunRef, string, error) {
 }
 
 func (s *Store) RunPath(ref RunRef) string {
-	return filepath.Join(s.root, ref.Task, ref.Model, ref.Timestamp)
+	return filepath.Join(s.root, ref.Task, encodeModel(ref.Model), ref.Timestamp)
 }
 
 func (s *Store) WriteResult(ref RunRef, r Result) error {
@@ -237,7 +249,7 @@ func (s *Store) Latest() (map[string]map[string]Result, error) {
 			if out[t.Name()] == nil {
 				out[t.Name()] = map[string]Result{}
 			}
-			out[t.Name()][m.Name()] = s.resultOrInterrupted(t.Name(), m.Name(), latest)
+			out[t.Name()][decodeModel(m.Name())] = s.resultOrInterrupted(t.Name(), decodeModel(m.Name()), latest)
 		}
 	}
 	return out, nil
@@ -245,7 +257,7 @@ func (s *Store) Latest() (map[string]map[string]Result, error) {
 
 // History returns all results for a (task, model) cell, newest first.
 func (s *Store) History(task, model string) ([]Result, error) {
-	dir := filepath.Join(s.root, task, model)
+	dir := filepath.Join(s.root, task, encodeModel(model))
 	runs, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return []Result{}, nil

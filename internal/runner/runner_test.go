@@ -337,6 +337,15 @@ func waitForJobStart(t *testing.T, r *Runner) {
 	t.Fatal("no job started")
 }
 
+func TestModelArg(t *testing.T) {
+	if got := modelArg("Qwen3.8-27B-coder-fast"); got != "llama-swap/Qwen3.8-27B-coder-fast" {
+		t.Fatalf("local model arg = %q", got)
+	}
+	if got := modelArg("opencode/deepseek-v4-flash-free"); got != "opencode/deepseek-v4-flash-free" {
+		t.Fatalf("provider-qualified arg = %q", got)
+	}
+}
+
 func TestCurrentRef(t *testing.T) {
 	r, _ := newTestRunner(t, "hang")
 	r.Timeout = func(tasks.Task) time.Duration { return 10 * time.Second }
