@@ -7,11 +7,14 @@
     previewUrl,
     setVerdict,
   } from "./api";
+  import { getFiles } from "./api";
   import RatingStrip from "./RatingStrip.svelte";
   import type { Matrix, Model, RunRef, TaskSummary } from "./types";
 
   let pending = $state<RunRef[]>([]);
   let matrix = $state<Matrix>({});
+  // task|model|ts -> whether the run's workspace has an index.html
+  let hasApp = $state<Record<string, boolean>>({});
   let tasks = $state<TaskSummary[]>([]);
   let names = $state<Record<string, string>>({});
   let idx = $state(0);
@@ -43,6 +46,28 @@
   });
 
   const current = $derived(pending[idx] ?? null);
+
+  function appKey(ref: RunRef): string {
+    return `${ref.task}|${ref.model}|${ref.timestamp}`;
+  }
+
+  async function probeApp(ref: RunRef) {
+    const key = appKey(ref);
+    if (key in hasApp) return;
+    try {
+      const files = await getFiles(ref);
+      hasApp[key] = files.some((f) => f.path === "index.html");
+    } catch {
+      hasApp[key] = false;
+    }
+  }
+
+  $effect(() => {
+    if (current) probeApp(current);
+    for (const run of galleryRuns) {
+      probeApp({ task: run.task, model: run.model, timestamp: run.timestamp });
+    }
+  });
   const taskTitle = $derived.by(() => {
     if (!current) return "";
     return tasks.find((t) => t.id === current.task)?.title || current.task;
@@ -150,14 +175,21 @@
               detail
             </a>
           </div>
-          <iframe
-            title="{run.task} × {run.model}"
-            sandbox="allow-scripts"
-            src={previewUrl(
-              { task: run.task, model: run.model, timestamp: run.timestamp },
-              "index.html",
-            )}
-          ></iframe>
+          {#if hasApp[appKey({ task: run.task, model: run.model, timestamp: run.timestamp })]}
+            <iframe
+              title="{run.task} × {run.model}"
+              sandbox="allow-scripts"
+              src={previewUrl(
+                { task: run.task, model: run.model, timestamp: run.timestamp },
+                "index.html",
+              )}
+            ></iframe>
+          {:else}
+            <div class="no-app">
+              No app produced — the agent wrote no index.html to its
+              workspace.
+            </div>
+          {/if}
           {#if !v}
             <div class="card-actions">
               <RatingStrip compact onrate={(rating) => judge(run, rating)} />
@@ -186,12 +218,19 @@
           full detail
         </a>
       </div>
-      <iframe
-        class="main-preview"
-        title="preview"
-        sandbox="allow-scripts"
-        src={previewUrl(current, "index.html")}
-      ></iframe>
+      {#if hasApp[appKey(current)]}
+        <iframe
+          class="main-preview"
+          title="preview"
+          sandbox="allow-scripts"
+          src={previewUrl(current, "index.html")}
+        ></iframe>
+      {:else}
+        <div class="no-app main-preview">
+          No app produced — the agent wrote no index.html to its workspace.
+          Check the transcript on the detail page to see what it did instead.
+        </div>
+      {/if}
       <div class="actions">
         <RatingStrip onrate={(rating) => judge(current, rating)} />
         <button onclick={skip}>skip (n)</button>
@@ -343,6 +382,19 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     background: #fff;
+  }
+  .no-app {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    aspect-ratio: 16 / 10;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 1rem;
+    background: var(--well, #141210);
   }
   .card-actions {
     display: flex;

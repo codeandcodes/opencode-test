@@ -294,9 +294,11 @@ func (s *Store) SafePath(ref RunRef, rel string) (string, error) {
 }
 
 // ListFiles walks the workspace, returning sorted workspace-relative entries.
+// Always returns a non-nil slice so the JSON API yields [] for empty
+// workspaces instead of null.
 func (s *Store) ListFiles(ref RunRef) ([]FileEntry, error) {
 	ws := filepath.Join(s.RunPath(ref), "workspace")
-	var out []FileEntry
+	out := []FileEntry{}
 	err := filepath.WalkDir(ws, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

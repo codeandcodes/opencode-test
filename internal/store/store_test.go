@@ -219,6 +219,21 @@ func TestSafePath(t *testing.T) {
 	}
 }
 
+func TestListFilesEmptyWorkspaceIsEmptySlice(t *testing.T) {
+	st := New(t.TempDir())
+	ref, _, _ := st.NewRunDir("tetris", "m")
+	files, err := st.ListFiles(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files == nil {
+		t.Fatal("empty workspace must yield [], not nil (JSON null breaks clients)")
+	}
+	if len(files) != 0 {
+		t.Fatalf("files = %v", files)
+	}
+}
+
 func TestListFiles(t *testing.T) {
 	st := New(t.TempDir())
 	ref, ws, _ := st.NewRunDir("tetris", "m")

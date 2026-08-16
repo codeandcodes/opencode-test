@@ -81,8 +81,9 @@ export function getRun(ref: RunRef): Promise<RunDetailResponse> {
   return request(runBase(ref));
 }
 
-export function getFiles(ref: RunRef): Promise<FileEntry[]> {
-  return request(`${runBase(ref)}/files`);
+export async function getFiles(ref: RunRef): Promise<FileEntry[]> {
+  const r = await request<FileEntry[]>(`${runBase(ref)}/files`);
+  return Array.isArray(r) ? r : [];
 }
 
 export function fileUrl(ref: RunRef, path: string): string {
