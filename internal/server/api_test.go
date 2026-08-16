@@ -493,6 +493,22 @@ func TestLeaderboard(t *testing.T) {
 	if a["rating_count"].(float64) != 2 || a["rating_avg"].(float64) != 7 {
 		t.Fatalf("model-a ratings: %v", a)
 	}
+	// score: 0.5*passPct + 0.5*ratingPct = 0.5*50 + 0.5*(100*(7-1)/9) = 58.33
+	if s := a["score"].(float64); s < 58.2 || s < 58 || s > 58.5 {
+		t.Fatalf("model-a score = %v, want ~58.33", s)
+	}
+	if a["score_basis"] != "checks+ratings" {
+		t.Fatalf("model-a basis = %v", a["score_basis"])
+	}
+	// model-b: 1/1 checks, no ratings -> checks-only score 100
+	b2 := byModel["model-b"]
+	if b2["score"].(float64) != 100 || b2["score_basis"] != "checks" {
+		t.Fatalf("model-b score: %v %v", b2["score"], b2["score_basis"])
+	}
+	// rows sorted by score descending
+	if rows[0]["model"] != "model-b" {
+		t.Fatalf("sort order: %v first", rows[0]["model"])
+	}
 	if tps := a["median_tps"].(float64); tps < 59 || tps > 61 {
 		t.Fatalf("model-a tps: %v", tps)
 	}

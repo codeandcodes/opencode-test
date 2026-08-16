@@ -109,6 +109,8 @@ export interface LeaderboardRow {
   errors: number;
   median_tps: number;
   samples: number;
+  score: number;
+  score_basis: "checks+ratings" | "checks" | "ratings" | "";
 }
 
 export function getLeaderboard(): Promise<LeaderboardRow[]> {

@@ -112,6 +112,35 @@ type leaderboardRow struct {
 	Errors           int     `json:"errors"` // cells whose latest run is an infrastructure failure
 	MedianTps        float64 `json:"median_tps"`
 	Samples          int     `json:"samples"`
+	// Score blends the objective and subjective axes on a 0-100 scale:
+	// 0.5 × check pass rate % + 0.5 × (rating avg − 1)/9 × 100. When only
+	// one axis has data, the score is that axis alone (see ScoreBasis).
+	Score      float64 `json:"score"`
+	ScoreBasis string  `json:"score_basis"` // checks+ratings | checks | ratings | ""
+}
+
+func (r *leaderboardRow) computeScore() {
+	hasChecks := r.CheckCells > 0
+	hasRatings := r.RatingCount > 0
+	passPct := 0.0
+	if hasChecks {
+		passPct = 100 * float64(r.CheckCellsPassed) / float64(r.CheckCells)
+	}
+	ratingPct := 0.0
+	if hasRatings {
+		ratingPct = 100 * (r.RatingAvg - 1) / 9
+	}
+	switch {
+	case hasChecks && hasRatings:
+		r.Score = 0.5*passPct + 0.5*ratingPct
+		r.ScoreBasis = "checks+ratings"
+	case hasChecks:
+		r.Score = passPct
+		r.ScoreBasis = "checks"
+	case hasRatings:
+		r.Score = ratingPct
+		r.ScoreBasis = "ratings"
+	}
 }
 
 func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -172,11 +201,12 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 				row.MedianTps = (tps[mid-1] + tps[mid]) / 2
 			}
 		}
+		row.computeScore()
 		out = append(out, *row)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].CheckCellsPassed != out[j].CheckCellsPassed {
-			return out[i].CheckCellsPassed > out[j].CheckCellsPassed
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
 		}
 		return out[i].Model < out[j].Model
 	})
