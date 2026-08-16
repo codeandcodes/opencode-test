@@ -53,14 +53,14 @@
   });
 
   function ageClass(sec: number): string {
-    if (sec < 0) return "age-unknown";
+    if (!Number.isFinite(sec) || sec < 0) return "age-unknown";
     if (sec < 60) return "age-fresh";
     if (sec < 300) return "age-slow";
     return "age-stuck";
   }
 
   function ageLabel(sec: number): string {
-    if (sec < 0) return "no events yet";
+    if (!Number.isFinite(sec) || sec < 0) return "no events yet";
     if (sec < 60) return `active ${Math.round(sec)}s ago`;
     return `quiet for ${Math.round(sec / 60)}m`;
   }
@@ -76,9 +76,9 @@
       <span class={"age " + ageClass(tail.last_event_age_sec)}>
         {ageLabel(tail.last_event_age_sec)}
       </span>
-      <span class="stat">{tail.steps} steps</span>
-      <span class="stat">{tail.tool_calls} tools</span>
-      <span class="stat">{fmtTokens(tail.tokens_out)} tok out</span>
+      <span class="stat well">{tail.steps ?? 0} steps</span>
+      <span class="stat well">{tail.tool_calls ?? 0} tools</span>
+      <span class="stat well">{fmtTokens(tail.tokens_out ?? 0)} tok out</span>
       <button
         type="button"
         class="toggle"

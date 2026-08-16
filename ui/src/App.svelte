@@ -5,6 +5,7 @@
   import ReviewMode from "./lib/ReviewMode.svelte";
   import NewTask from "./lib/NewTask.svelte";
   import RunDetail from "./lib/RunDetail.svelte";
+  import { getReviewsPending } from "./lib/api";
   import { subscribe } from "./lib/sse";
   import type { RunnerEvent } from "./lib/types";
 
@@ -43,6 +44,15 @@
   // refetches after every job.
   let refresh = $state(0);
   let live = $state<RunnerEvent | null>(null);
+  let pendingReviews = $state(0);
+
+  $effect(() => {
+    void refresh;
+    void hash; // recount when navigating (verdicts change the queue)
+    getReviewsPending()
+      .then((p) => (pendingReviews = p.length))
+      .catch(() => {});
+  });
 
   $effect(() => {
     const close = subscribe((e) => {
@@ -62,12 +72,17 @@
 <svelte:window onhashchange={() => (hash = location.hash)} />
 
 <nav>
-  <span class="brand">opencode-bench</span>
+  <span class="brand">
+    <span class="power-lamp" class:on={!!live} aria-hidden="true"></span>
+    opencode<span class="brand-dim">-bench</span>
+  </span>
   <a href="#/" class:current={route.page === "matrix" || route.page === "run"}>
     Matrix
   </a>
   <a href="#/compare" class:current={route.page === "compare"}>Compare</a>
-  <a href="#/review" class:current={route.page === "review"}>Review</a>
+  <a href="#/review" class:current={route.page === "review"}>
+    Review{#if pendingReviews > 0}<span class="nav-badge">{pendingReviews}</span>{/if}
+  </a>
   <a href="#/leaderboard" class:current={route.page === "leaderboard"}>
     Leaderboard
   </a>
@@ -112,10 +127,42 @@
     z-index: 10;
   }
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     font-family: var(--mono);
-    font-weight: 700;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    color: var(--fg);
+    margin-right: 0.8rem;
+  }
+  .brand-dim {
+    color: var(--muted);
+  }
+  .power-lamp {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--grey);
+    transition: background 300ms ease;
+  }
+  .power-lamp.on {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .nav-badge {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: var(--well, #141210);
+    border: 1px solid var(--border);
     color: var(--accent);
-    margin-right: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
   }
   nav a {
     color: var(--muted);

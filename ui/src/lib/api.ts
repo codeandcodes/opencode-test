@@ -127,7 +127,12 @@ export interface ActiveTail {
 /** Returns null when no job is executing. */
 export async function getActiveTail(): Promise<ActiveTail | null> {
   try {
-    return await request<ActiveTail>("/api/runs/active/tail");
+    const r = await request<ActiveTail>("/api/runs/active/tail");
+    // Shape guard: a mismatched server route can answer with other JSON.
+    if (!r || typeof r.task !== "string" || !Array.isArray(r.recent)) {
+      return null;
+    }
+    return r;
   } catch {
     return null;
   }
@@ -141,7 +146,11 @@ export interface ResumableBatch {
 /** Returns null when there is no interrupted batch to resume. */
 export async function getResumable(): Promise<ResumableBatch | null> {
   try {
-    return await request<ResumableBatch>("/api/runs/resumable");
+    const r = await request<ResumableBatch>("/api/runs/resumable");
+    if (!r || typeof r.count !== "number" || !Array.isArray(r.jobs)) {
+      return null;
+    }
+    return r;
   } catch {
     return null;
   }
