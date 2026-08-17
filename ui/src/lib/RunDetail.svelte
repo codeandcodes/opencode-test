@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { clearVerdict, getFiles, getHistory, getRun, setVerdict } from "./api";
+  import {
+    clearVerdict,
+    getFiles,
+    getHistory,
+    getRubric,
+    getRun,
+    setVerdict,
+    type Rubric,
+  } from "./api";
+  import RubricPanel from "./RubricPanel.svelte";
   import { fmtCheckScore, fmtTokens, fmtTps, ratingBand } from "./fmt";
   import RatingStrip from "./RatingStrip.svelte";
   import FileTree from "./FileTree.svelte";
@@ -48,6 +57,12 @@
 
   let verdictNote = $state("");
   let verdictError = $state("");
+  let rubric = $state<Rubric | null>(null);
+  $effect(() => {
+    getRubric()
+      .then((r) => (rubric = r))
+      .catch(() => {});
+  });
 
   async function rate(rating: number) {
     verdictError = "";
@@ -156,7 +171,7 @@
         <button class="linkish" onclick={unjudge}>clear</button>
       {:else}
         <span class="k">rate this result — 1 non-functional · 10 perfect:</span>
-        <RatingStrip onrate={rate} />
+        <RatingStrip {rubric} onrate={rate} />
         <input
           type="text"
           placeholder="note (optional)"
@@ -165,6 +180,9 @@
       {/if}
       {#if verdictError}<span class="error">{verdictError}</span>{/if}
     </div>
+    {#if !result.verdict}
+      <RubricPanel {rubric} />
+    {/if}
 
     {#if detail.check_log}
       <section>

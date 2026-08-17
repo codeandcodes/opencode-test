@@ -1,0 +1,56 @@
+{
+  "scale": "1-10",
+  "purpose": "Subjective rating rubric for review-task builds. Used by human reviewers and intended as the specification for future LLM auto-rating.",
+  "levels": [
+    {
+      "rating": 1,
+      "band": "non-functional",
+      "description": "Completely non-functional, or the app fails to load at all."
+    },
+    {
+      "rating": 2,
+      "band": "non-functional",
+      "description": "Loads a UI, but missing nearly all major pieces."
+    },
+    {
+      "rating": 3,
+      "band": "barely functional",
+      "description": "UI loads and looks correct, but multiple major functions are broken, plus multiple other bugs or issues."
+    },
+    {
+      "rating": 4,
+      "band": "semi-functional",
+      "description": "One major function broken; multiple minor bugs observed."
+    },
+    {
+      "rating": 5,
+      "band": "semi-functional",
+      "description": "One major function broken; few minor bugs observed."
+    },
+    {
+      "rating": 6,
+      "band": "functional with workarounds",
+      "description": "Fully functional with workarounds; multiple observable minor bugs (e.g. UI broken or ugly)."
+    },
+    {
+      "rating": 7,
+      "band": "functional with workarounds",
+      "description": "Fully functional with a workaround; only one easily observable minor bug."
+    },
+    {
+      "rating": 8,
+      "band": "fully functional",
+      "description": "Fully functional without minor bugs, but the UI is substandard."
+    },
+    {
+      "rating": 9,
+      "band": "fully functional",
+      "description": "Fully functional, no minor bugs; UI meets expectations."
+    },
+    {
+      "rating": 10,
+      "band": "fully functional",
+      "description": "Fully functional, no minor bugs; UI surpasses expectations."
+    }
+  ]
+}

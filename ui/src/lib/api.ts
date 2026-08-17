@@ -98,6 +98,22 @@ export function getReviewsPending(): Promise<RunRef[]> {
   return request("/api/reviews/pending");
 }
 
+export interface RubricLevel {
+  rating: number;
+  band: string;
+  description: string;
+}
+
+export interface Rubric {
+  scale: string;
+  purpose: string;
+  levels: RubricLevel[];
+}
+
+export function getRubric(): Promise<Rubric> {
+  return request("/api/rubric");
+}
+
 export interface LeaderboardRow {
   model: string;
   check_cells: number;

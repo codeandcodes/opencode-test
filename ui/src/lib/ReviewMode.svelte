@@ -7,14 +7,22 @@
     previewUrl,
     setVerdict,
   } from "./api";
-  import { getFiles } from "./api";
+  import { getFiles, getRubric, type Rubric } from "./api";
   import RatingStrip from "./RatingStrip.svelte";
+  import RubricPanel from "./RubricPanel.svelte";
   import type { Matrix, Model, RunRef, TaskSummary } from "./types";
 
   let pending = $state<RunRef[]>([]);
   let matrix = $state<Matrix>({});
   // task|model|ts -> whether the run's workspace has an index.html
   let hasApp = $state<Record<string, boolean>>({});
+  let rubric = $state<Rubric | null>(null);
+
+  $effect(() => {
+    getRubric()
+      .then((r) => (rubric = r))
+      .catch(() => {});
+  });
   let tasks = $state<TaskSummary[]>([]);
   let names = $state<Record<string, string>>({});
   let idx = $state(0);
@@ -141,6 +149,7 @@
   </header>
 
   {#if error}<p class="error">{error}</p>{/if}
+  <RubricPanel {rubric} />
 
   {#if !loaded}
     <p class="muted">Loading…</p>
@@ -192,7 +201,11 @@
           {/if}
           {#if !v}
             <div class="card-actions">
-              <RatingStrip compact onrate={(rating) => judge(run, rating)} />
+              <RatingStrip
+                compact
+                {rubric}
+                onrate={(rating) => judge(run, rating)}
+              />
             </div>
           {/if}
         </div>
@@ -232,7 +245,7 @@
         </div>
       {/if}
       <div class="actions">
-        <RatingStrip onrate={(rating) => judge(current, rating)} />
+        <RatingStrip {rubric} onrate={(rating) => judge(current, rating)} />
         <button onclick={skip}>skip (n)</button>
         <input
           type="text"

@@ -1,12 +1,26 @@
 <script lang="ts">
+  import type { Rubric } from "./api";
   import { ratingBand } from "./fmt";
 
   let {
     onrate,
     compact = false,
-  }: { onrate: (rating: number) => void; compact?: boolean } = $props();
+    rubric = null,
+  }: {
+    onrate: (rating: number) => void;
+    compact?: boolean;
+    rubric?: Rubric | null;
+  } = $props();
 
   const ratings = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  function hint(n: number): string {
+    const level = rubric?.levels.find((l) => l.rating === n);
+    if (level) return `${n} — ${level.band}: ${level.description}`;
+    if (n === 1) return "1 — completely non-functional";
+    if (n === 10) return "10 — perfect result";
+    return String(n);
+  }
 </script>
 
 <div class="strip" class:compact>
@@ -14,11 +28,7 @@
     <button
       type="button"
       class="r r-{ratingBand(n)}"
-      title={n === 1
-        ? "1 — completely non-functional"
-        : n === 10
-          ? "10 — perfect result"
-          : String(n)}
+      title={hint(n)}
       onclick={() => onrate(n)}
     >
       {n}

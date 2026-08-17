@@ -410,6 +410,33 @@ func TestVerdictLifecycle(t *testing.T) {
 	}
 }
 
+func TestRubric(t *testing.T) {
+	s, _, _ := newTestServer(t, "ok")
+	rr := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rr, httptest.NewRequest("GET", "/api/rubric", nil))
+	if rr.Code != 200 {
+		t.Fatalf("code = %d", rr.Code)
+	}
+	var rubric struct {
+		Levels []struct {
+			Rating      int    `json:"rating"`
+			Band        string `json:"band"`
+			Description string `json:"description"`
+		} `json:"levels"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &rubric); err != nil {
+		t.Fatal(err)
+	}
+	if len(rubric.Levels) != 10 {
+		t.Fatalf("levels = %d", len(rubric.Levels))
+	}
+	for i, l := range rubric.Levels {
+		if l.Rating != i+1 || l.Description == "" || l.Band == "" {
+			t.Fatalf("level %d malformed: %+v", i, l)
+		}
+	}
+}
+
 func TestExtraModels(t *testing.T) {
 	s, _, _ := newTestServer(t, "ok")
 	s.cfg.ExtraModels = []string{"opencode/deepseek-v4-flash-free=DeepSeek v4 Flash (free)"}

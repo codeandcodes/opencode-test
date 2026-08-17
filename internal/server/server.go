@@ -2,6 +2,7 @@
 package server
 
 import (
+	_ "embed"
 	"net/http"
 
 	"opencode-bench/internal/runner"
@@ -44,3 +45,6 @@ func New(cfg Config) *Server {
 }
 
 func (s *Server) Handler() http.Handler { return s.mux }
+
+//go:embed rubric.json
+var rubricJSON []byte

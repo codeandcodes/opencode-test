@@ -54,9 +54,17 @@ func (s *Server) registerAPI() {
 	s.mux.HandleFunc("DELETE /api/runs/resumable", s.handleResumableDismiss)
 	s.mux.HandleFunc("POST /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictSet)
 	s.mux.HandleFunc("DELETE /api/runs/{task}/{model}/{ts}/verdict", s.handleVerdictClear)
+	s.mux.HandleFunc("GET /api/rubric", s.handleRubric)
 	s.mux.HandleFunc("GET /api/reviews/pending", s.handleReviewsPending)
 	s.mux.HandleFunc("GET /api/leaderboard", s.handleLeaderboard)
 	s.mux.HandleFunc("GET /api/events", s.handleSSE)
+}
+
+// handleRubric serves the 1-10 subjective rating rubric — the reviewer's
+// reference and the specification for any future LLM auto-rater.
+func (s *Server) handleRubric(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(rubricJSON)
 }
 
 // handleReviewsPending lists completed review runs (status done — checks
