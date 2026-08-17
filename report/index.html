@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local Coding-Agent Benchmark</title>
+    <style>
+      :root {
+        --ink: #1f1c18;
+        --muted: #6b6459;
+        --accent: #b97a1f;
+        --rule: #e4ddd2;
+        --panel: #faf7f2;
+        --mono:
+          "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #fff;
+        color: var(--ink);
+        font:
+          16px/1.6 "IBM Plex Sans",
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      h1 {
+        font-size: 1.9rem;
+        line-height: 1.25;
+        margin: 0 0 0.4rem;
+        letter-spacing: -0.01em;
+      }
+      .byline {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin: 0 0 2.2rem;
+        padding-bottom: 1.2rem;
+        border-bottom: 3px solid var(--accent);
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin: 2.6rem 0 0.8rem;
+        padding-top: 0.4rem;
+      }
+      h3 {
+        font-size: 1.05rem;
+        margin: 1.8rem 0 0.6rem;
+      }
+      p,
+      li {
+        max-width: 76ch;
+      }
+      li {
+        margin: 0.35rem 0;
+      }
+      b {
+        color: #000;
+      }
+      figure {
+        margin: 1.8rem 0;
+      }
+      figure img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+      }
+      figcaption {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+      }
+      .tablewrap {
+        overflow-x: auto;
+        margin: 1.2rem 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.9rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.45rem 0.7rem;
+        border-bottom: 1px solid var(--rule);
+        vertical-align: top;
+      }
+      th {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        border-bottom: 2px solid var(--ink);
+        white-space: nowrap;
+      }
+      td.n,
+      th.n {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      tbody tr:nth-child(even) {
+        background: var(--panel);
+      }
+      td.rank {
+        color: var(--muted);
+      }
+      .lead td:first-child,
+      .lead td.score {
+        font-weight: 600;
+      }
+      .note {
+        background: var(--panel);
+        border-left: 3px solid var(--accent);
+        padding: 0.7rem 1rem;
+        font-size: 0.9rem;
+        max-width: 76ch;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Local Coding-Agent Benchmark: Nine Models on the opencode Harness</h1>
+      <p class="byline">
+        rocketegg &middot; 2026-08-17 &middot; benchmark tooling: opencode-bench
+        (custom harness over opencode + llama-swap + llama.cpp)
+      </p>
+
+      <h2>Executive summary</h2>
+      <ul>
+        <li>
+          <b
+            >Qwen3.8-27B coder-think is the best overall coding agent tested
+            (score 79.4/100)</b
+          >, matching every model on objective checks (9/10) while earning the
+          second-highest subjective quality rating (7.2/10). Its non-thinking
+          sibling trades 2 points of quality for 23% more speed.
+        </li>
+        <li>
+          <b
+            >A dense ~30B class model beats much larger MoEs at agentic
+            coding.</b
+          >
+          Gemma 4 31B (#2, 76.1) and the Qwen3.8 27B pair outperform the
+          122B-A10B flagship (67.8) and gpt-oss 120B (43.9).
+        </li>
+        <li>
+          <b
+            >The free hosted reference (DeepSeek v4 Flash) lands mid-pack
+            (64.7), not on top.</b
+          >
+          Its raw capability is high &mdash; 9/10 checks, and its completed apps
+          rated up to 10/10 &mdash; but it paid a heavy reliability tax on the
+          agent harness: two stalls and repeated failures to emit large files as
+          tool calls. A retry experiment showed this failure is partly
+          non-deterministic (transport/serving) and partly deterministic (model
+          behavior).
+        </li>
+        <li>
+          <b>Speed and quality are uncorrelated in this fleet.</b> The two
+          fastest models (Qwen3.6 MTP at 303 tok/s, gpt-oss at 227 tok/s) sit in
+          the bottom half on quality; the quality leaders generate at
+          42&ndash;91 tok/s.
+        </li>
+        <li>
+          <b>Local tool-call reliability is a genuine advantage.</b> Zero local
+          runs failed to produce workspace files; the hosted reference failed to
+          do so in 4 of 13 review attempts.
+        </li>
+      </ul>
+
+      <figure>
+        <img
+          src="fig1.png"
+          alt="Stacked bar chart: composite score per model split into objective (checks) and subjective (ratings) halves"
+          width="880"
+        />
+        <figcaption>
+          Figure 1 &mdash; Composite score by model, decomposed into its
+          objective (blue) and subjective (orange) halves.
+        </figcaption>
+      </figure>
+
+      <h2>Methodology</h2>
+      <p>
+        Each model runs as an autonomous coding agent through
+        <b>opencode</b> (v1.1.48, auto-approved tools) against a suite of
+        <b>20 tasks</b> in fresh, git-anchored scratch workspaces. Local models
+        are served by <b>llama.cpp</b> (build 10443) behind <b>llama-swap</b>,
+        which hot-swaps models on demand on a single RTX PRO 6000 Blackwell (96
+        GB). Jobs run serially, model-major, with a 45-minute task timeout and a
+        10-minute event-stream idle kill.
+      </p>
+      <p><b>Task suite</b> &mdash; two kinds:</p>
+      <ul>
+        <li>
+          <b>10 review tasks</b> (subjective): deliberately complex, visually
+          verifiable single-page web apps &mdash; checkers with minimax AI,
+          Tetris with SRS rotation, a hand-rolled Markdown editor, a spreadsheet
+          with a dependency-graph formula engine, a flowchart editor with
+          orthogonal connector routing, a brushable data dashboard, a physics
+          sandbox, a DST-correct recurring-events calendar, a WIP-limited kanban
+          board, and a convolution-kernel image editor. Each build is played by
+          a human reviewer and rated 1&ndash;10 against a written rubric
+          (1&ndash;2 non-functional, 3 barely functional, 4&ndash;5
+          semi-functional, 6&ndash;7 functional with workarounds, 8&ndash;10
+          fully functional with ascending UI quality).
+        </li>
+        <li>
+          <b>10 check tasks</b> (objective): scripted pass/fail with partial
+          credit &mdash; Go algorithm suite (race-detector clean), a Python
+          expression engine, a strict CSV toolkit CLI contract, an HTTP API
+          contract (JWT, ETags, cursor pagination), a fix-the-race task with a
+          hash-protected test file, SQLite analytics with exact-output diffs, a
+          JSON normalization pipeline, a vending-machine protocol spec, git
+          surgery judged on final repository state, and a JavaScript duration
+          library under node&rsquo;s test runner. Graders restore canonical test
+          files before scoring, so test tampering is impossible.
+        </li>
+      </ul>
+      <p>
+        <b>Scoring.</b> Composite score = 50% objective (fraction of check tasks
+        passed) + 50% subjective (mean 1&ndash;10 rating rescaled to
+        0&ndash;100). Generation speed is measured over
+        <i>model-active time</i> from the agent event stream &mdash; excluding
+        model load, first-token wait, and tool execution &mdash; so hosted and
+        local speeds are comparable. Every run records full provenance (prompt
+        hash, task definition, exact serving configuration).
+      </p>
+      <p class="note">
+        <b>Integrity notes.</b> Two harness defects were found and fixed during
+        the campaign, and every affected run was invalidated and re-measured:
+        (1) a project-root discovery quirk let absolute-path-preferring models
+        write outside their workspaces (fixed by git-anchoring workspaces; 10
+        runs re-measured, most on the 122B); (2) a check-script pipe inheritance
+        bug could wedge the runner (fixed with process-group isolation and
+        file-based output capture).
+      </p>
+
+      <h2>Models tested</h2>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Architecture</th>
+              <th>Quant / Serving</th>
+              <th class="n">Context</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Qwen3.8-27B (coder-think)</td>
+              <td>28B dense hybrid (Gated DeltaNet + Gated Attention)</td>
+              <td>Q8_0, llama.cpp + MTP self-speculative</td>
+              <td class="n">262K</td>
+              <td>thinking capped at 8192 tokens</td>
+            </tr>
+            <tr>
+              <td>Qwen3.8-27B (coder-fast)</td>
+              <td>same weights as coder-think</td>
+              <td>Q8_0, llama.cpp + MTP</td>
+              <td class="n">262K</td>
+              <td>thinking disabled; instruct sampling</td>
+            </tr>
+            <tr>
+              <td>Gemma 4 31B it</td>
+              <td>31B dense</td>
+              <td>Q8_0, llama.cpp</td>
+              <td class="n">131K</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Muse Glimmer 30B</td>
+              <td>28B text + 2B vision, dense (Meta)</td>
+              <td>Q8_0, llama.cpp + DFlash block-diffusion drafter</td>
+              <td class="n">131K</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Qwen3.5-122B-A10B</td>
+              <td>122B MoE, 10B active</td>
+              <td>UD-Q4_K_XL, llama.cpp</td>
+              <td class="n">262K</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Qwen3.6-35B-A3B</td>
+              <td>35B MoE, 3B active</td>
+              <td>Q4, llama.cpp + MTP</td>
+              <td class="n">262K</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>GLM-4.5 Air</td>
+              <td>106B MoE, 12B active</td>
+              <td>Q4_K_S, llama.cpp</td>
+              <td class="n">131K</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>gpt-oss-120b</td>
+              <td>117B MoE, 5.1B active</td>
+              <td>Q8_0, llama.cpp</td>
+              <td class="n">131K</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>DeepSeek v4 Flash</td>
+              <td>hosted, free tier (opencode zen)</td>
+              <td>n/a (API)</td>
+              <td class="n">n/a</td>
+              <td>reference line</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Results</h2>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="n">#</th>
+              <th>Model</th>
+              <th class="n">Score</th>
+              <th class="n">Checks</th>
+              <th class="n">Rating (n)</th>
+              <th class="n">Median tok/s</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="lead">
+              <td class="n rank">1</td>
+              <td>Qwen3.8-27B coder-think</td>
+              <td class="n score">79.4</td>
+              <td class="n">9/10</td>
+              <td class="n">7.20 (10)</td>
+              <td class="n">74.0</td>
+            </tr>
+            <tr>
+              <td class="n rank">2</td>
+              <td>Gemma 4 31B</td>
+              <td class="n">76.1</td>
+              <td class="n">9/10</td>
+              <td class="n">6.60 (10)</td>
+              <td class="n">42.3</td>
+            </tr>
+            <tr>
+              <td class="n rank">3</td>
+              <td>Qwen3.8-27B coder-fast</td>
+              <td class="n">75.0</td>
+              <td class="n">8/10</td>
+              <td class="n">7.30 (10)</td>
+              <td class="n">91.2</td>
+            </tr>
+            <tr>
+              <td class="n rank">4</td>
+              <td>Muse Glimmer 30B</td>
+              <td class="n">72.2</td>
+              <td class="n">9/10</td>
+              <td class="n">5.90 (10)</td>
+              <td class="n">133.6</td>
+            </tr>
+            <tr>
+              <td class="n rank">5</td>
+              <td>Qwen3.5-122B-A10B</td>
+              <td class="n">67.8</td>
+              <td class="n">8/10</td>
+              <td class="n">6.00 (10)</td>
+              <td class="n">97.9</td>
+            </tr>
+            <tr>
+              <td class="n rank">6</td>
+              <td>DeepSeek v4 Flash (hosted)</td>
+              <td class="n">64.7</td>
+              <td class="n">9/10</td>
+              <td class="n">4.55 (11)</td>
+              <td class="n">101.2</td>
+            </tr>
+            <tr>
+              <td class="n rank">7</td>
+              <td>Qwen3.6-35B-A3B (MTP)</td>
+              <td class="n">62.8</td>
+              <td class="n">8/10</td>
+              <td class="n">5.10 (10)</td>
+              <td class="n">303.0</td>
+            </tr>
+            <tr>
+              <td class="n rank">8</td>
+              <td>GLM-4.5 Air</td>
+              <td class="n">53.7</td>
+              <td class="n">6/10</td>
+              <td class="n">5.27 (11)</td>
+              <td class="n">75.9</td>
+            </tr>
+            <tr>
+              <td class="n rank">9</td>
+              <td>gpt-oss-120b</td>
+              <td class="n">43.9</td>
+              <td class="n">6/10</td>
+              <td class="n">3.50 (10)</td>
+              <td class="n">227.0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure>
+        <img
+          src="fig2.png"
+          alt="Scatter plot of composite score versus median generation speed for all nine models"
+          width="880"
+        />
+        <figcaption>
+          Figure 2 &mdash; Quality vs generation speed. Speed is tokens/s over
+          model-active time, excluding model load and tool waits.
+        </figcaption>
+      </figure>
+
+      <h3>Findings in detail</h3>
+      <p>
+        <b>1. Thinking helps correctness; costs speed.</b> The two Qwen3.8
+        variants share weights and differ only in reasoning mode. Thinking
+        lifted checks from 8/10 to 9/10 and held equal subjective quality, at 74
+        vs 91 tok/s. For overnight batch work, coder-think; for interactive
+        agent loops, coder-fast.
+      </p>
+      <p>
+        <b>2. Dense mid-size beats sparse large, at agentic coding.</b> The top
+        four are all dense 27&ndash;31B models. The 122B and 106B MoEs generate
+        faster per active parameter but produced consistently lower-rated
+        builds; gpt-oss-120b, despite 6/10 checks and 227 tok/s, averaged just
+        3.5/10 on build quality &mdash; fast, technically capable, but its apps
+        were the weakest reviewed.
+      </p>
+      <p>
+        <b
+          >3. The hosted free reference is a capability peer with a reliability
+          handicap.</b
+        >
+        DeepSeek matched the best locals on checks (9/10) and, when it engaged,
+        built apps the reviewer rated up to 10/10. But in 4 of 13 review
+        attempts it emitted its work as unparseable chat text after a single
+        tool call, and twice it stalled past the 10-minute idle threshold. A
+        controlled retry of its three text-dump failures flipped one to success
+        (evidence of transport/serving flakiness) while two reproduced exactly
+        (deterministic model behavior on large single-file outputs). Local
+        llama.cpp serving, with per-model tool-call templates and no rate
+        limits, exhibited zero such failures across 160+ runs.
+      </p>
+      <p>
+        <b>4. Speed is architecture, not quality.</b> MTP/speculative decoding
+        gives Qwen3.6 a 303 tok/s median and Muse Glimmer&rsquo;s DFlash drafter
+        134 tok/s. Neither converts to quality leadership. Notably, Gemma 4 31B
+        is simultaneously the second-best and the slowest model in the fleet.
+      </p>
+
+      <h2>Generation statistics</h2>
+      <p>
+        Per-model averages over all completed runs (20&ndash;21 per model).
+        <b>Tokens out</b> includes reasoning tokens. <b>Generation time</b> is
+        model-active decode time only &mdash; tool execution and model loading
+        are excluded. <b>First token</b> is the wait from request start to the
+        first generated token; the <i>cold</i> column is the worst case, which
+        for local models is the llama-swap model swap (loading tens of GB of
+        weights into VRAM) and for the hosted model is provider queueing.
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th class="n">Runs</th>
+              <th class="n">Avg tokens in</th>
+              <th class="n">Avg tokens out</th>
+              <th class="n">Total tokens out</th>
+              <th class="n">Avg gen time</th>
+              <th class="n">First token (avg)</th>
+              <th class="n">First token (cold)</th>
+              <th class="n">Avg wall time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Qwen3.8-27B coder-think</td>
+              <td class="n">20</td>
+              <td class="n">46,394</td>
+              <td class="n">52,008</td>
+              <td class="n">1,040,170</td>
+              <td class="n">750 s</td>
+              <td class="n">11.9 s</td>
+              <td class="n">74 s</td>
+              <td class="n">812 s</td>
+            </tr>
+            <tr>
+              <td>Gemma 4 31B</td>
+              <td class="n">20</td>
+              <td class="n">21,457</td>
+              <td class="n">9,510</td>
+              <td class="n">190,202</td>
+              <td class="n">240 s</td>
+              <td class="n">49.1 s</td>
+              <td class="n">245 s</td>
+              <td class="n">305 s</td>
+            </tr>
+            <tr>
+              <td>Qwen3.8-27B coder-fast</td>
+              <td class="n">20</td>
+              <td class="n">39,943</td>
+              <td class="n">24,697</td>
+              <td class="n">493,945</td>
+              <td class="n">329 s</td>
+              <td class="n">2.8 s</td>
+              <td class="n">20 s</td>
+              <td class="n">419 s</td>
+            </tr>
+            <tr>
+              <td>Muse Glimmer 30B</td>
+              <td class="n">20</td>
+              <td class="n">13,670</td>
+              <td class="n">10,926</td>
+              <td class="n">218,539</td>
+              <td class="n">80 s</td>
+              <td class="n">9.8 s</td>
+              <td class="n">111 s</td>
+              <td class="n">153 s</td>
+            </tr>
+            <tr>
+              <td>Qwen3.5-122B-A10B</td>
+              <td class="n">20</td>
+              <td class="n">11,442</td>
+              <td class="n">8,226</td>
+              <td class="n">164,538</td>
+              <td class="n">84 s</td>
+              <td class="n">10.8 s</td>
+              <td class="n">68 s</td>
+              <td class="n">161 s</td>
+            </tr>
+            <tr>
+              <td>DeepSeek v4 Flash (hosted)</td>
+              <td class="n">21</td>
+              <td class="n">39,066</td>
+              <td class="n">29,122</td>
+              <td class="n">611,564</td>
+              <td class="n">292 s</td>
+              <td class="n">51.3 s</td>
+              <td class="n">255 s</td>
+              <td class="n">441 s</td>
+            </tr>
+            <tr>
+              <td>Qwen3.6-35B-A3B (MTP)</td>
+              <td class="n">20</td>
+              <td class="n">14,222</td>
+              <td class="n">12,468</td>
+              <td class="n">249,362</td>
+              <td class="n">44 s</td>
+              <td class="n">2.7 s</td>
+              <td class="n">21 s</td>
+              <td class="n">81 s</td>
+            </tr>
+            <tr>
+              <td>GLM-4.5 Air</td>
+              <td class="n">21</td>
+              <td class="n">5,137</td>
+              <td class="n">9,748</td>
+              <td class="n">204,713</td>
+              <td class="n">139 s</td>
+              <td class="n">9.6 s</td>
+              <td class="n">120 s</td>
+              <td class="n">307 s</td>
+            </tr>
+            <tr>
+              <td>gpt-oss-120b</td>
+              <td class="n">20</td>
+              <td class="n">14,129</td>
+              <td class="n">5,502</td>
+              <td class="n">110,055</td>
+              <td class="n">27 s</td>
+              <td class="n">3.2 s</td>
+              <td class="n">54 s</td>
+              <td class="n">91 s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Four things stand out.
+        <b>First, the leaderboard winner bought its ranking with tokens.</b>
+        Qwen3.8 coder-think generated 1.04&nbsp;million output tokens across 20
+        tasks &mdash; five times the fleet median &mdash; and spent 12.5 minutes
+        of pure decode per task. Its sibling coder-fast (thinking disabled) kept
+        94% of the composite score at half the output volume and roughly half
+        the wall time. <b>Second, speed without volume loses.</b> gpt-oss-120b
+        was by far the quickest agent (91 s average wall time, 27 s of decode)
+        but emitted only 5.5k tokens per task &mdash; it rushed minimal
+        solutions, which is exactly what its last-place 43.9 score reflects.
+        <b
+          >Third, input volume tracks agentic thoroughness, not context
+          waste.</b
+        >
+        The two strongest coding-tuned configurations (the Qwen3.8 coder
+        variants and DeepSeek) each read 39&ndash;46k tokens per task &mdash;
+        re-reading files after edits and verifying their own work &mdash; while
+        GLM-4.5 Air averaged just 5.1k tokens in, consistent with its shallow
+        single-pass attempts.
+        <b>Fourth, cold starts are the hidden tax of model-major batching.</b> A
+        llama-swap model swap cost up to 245 s (Gemma) before the first token,
+        and the hosted DeepSeek endpoint queued for up to 255 s &mdash; but warm
+        runs started in single-digit seconds on every local model.
+      </p>
+
+      <h2>The benchmark app</h2>
+      <p>
+        All data was produced and reviewed in opencode-bench: a task&times;model
+        matrix with per-run provenance, live transcripts, sandboxed app
+        previews, a keyboard-driven review queue with per-task galleries, and a
+        composite leaderboard.
+      </p>
+      <figure>
+        <img
+          src="app-leaderboard.png"
+          alt="Screenshot of the opencode-bench leaderboard view"
+          width="780"
+        />
+        <figcaption>
+          The leaderboard view: composite score with objective/subjective
+          decomposition, sortable columns.
+        </figcaption>
+      </figure>
+      <figure>
+        <img
+          src="app-matrix.png"
+          alt="Screenshot of the opencode-bench task-by-model matrix view"
+          width="880"
+        />
+        <figcaption>
+          The task &times; model matrix: every cell links to its run history,
+          transcript, workspace, and preview.
+        </figcaption>
+      </figure>
+
+      <h2>Caveats</h2>
+      <ul>
+        <li>
+          Mostly one sample per cell; agent runs are stochastic. The harness
+          supports N-sample top-ups; pass rates would benefit from n&ge;3.
+        </li>
+        <li>
+          One human reviewer using a written rubric; subjective ratings carry
+          personal taste, especially in the 6&ndash;9 band.
+        </li>
+        <li>
+          The review suite is browser-app-centric; models stronger at backend
+          work are relatively favored by the check suite only.
+        </li>
+        <li>
+          The hosted reference ran on a free tier; a paid frontier endpoint
+          would likely both score higher and stall less.
+        </li>
+        <li>
+          Local quants differ (Q8 vs Q4 classes) per VRAM fit; scores measure
+          served configurations, not raw checkpoints.
+        </li>
+      </ul>
+
+      <h2>Appendix: rating rubric</h2>
+      <p>
+        Also served machine-readable by the harness (<code>/api/rubric</code>)
+        so a future LLM auto-rater can follow the same standard.
+      </p>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="n">Rating</th>
+              <th>Definition</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="n">1</td>
+              <td>Completely non-functional, or fails to load</td>
+            </tr>
+            <tr>
+              <td class="n">2</td>
+              <td>Loads a UI but missing nearly all major pieces</td>
+            </tr>
+            <tr>
+              <td class="n">3</td>
+              <td>
+                UI looks correct; multiple major functions broken plus other
+                bugs
+              </td>
+            </tr>
+            <tr>
+              <td class="n">4</td>
+              <td>One major function broken; multiple minor bugs</td>
+            </tr>
+            <tr>
+              <td class="n">5</td>
+              <td>One major function broken; few minor bugs</td>
+            </tr>
+            <tr>
+              <td class="n">6</td>
+              <td>
+                Fully functional with workarounds; multiple minor bugs (e.g. UI
+                broken/ugly)
+              </td>
+            </tr>
+            <tr>
+              <td class="n">7</td>
+              <td>
+                Fully functional with a workaround; one easily observable minor
+                bug
+              </td>
+            </tr>
+            <tr>
+              <td class="n">8</td>
+              <td>Fully functional, no minor bugs, substandard UI</td>
+            </tr>
+            <tr>
+              <td class="n">9</td>
+              <td>Fully functional, no minor bugs, UI meets expectations</td>
+            </tr>
+            <tr>
+              <td class="n">10</td>
+              <td>
+                Fully functional, no minor bugs, UI surpasses expectations
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </body>
+</html>
