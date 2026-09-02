@@ -4,6 +4,7 @@
   import Matrix from "./lib/Matrix.svelte";
   import ReviewMode from "./lib/ReviewMode.svelte";
   import NewTask from "./lib/NewTask.svelte";
+  import Reports from "./lib/Reports.svelte";
   import RunDetail from "./lib/RunDetail.svelte";
   import { getReviewsPending } from "./lib/api";
   import { subscribe } from "./lib/sse";
@@ -15,6 +16,7 @@
     | { page: "compare" }
     | { page: "leaderboard" }
     | { page: "review" }
+    | { page: "reports"; slug?: string }
     | { page: "new" };
 
   function parseRoute(h: string): Route {
@@ -33,6 +35,13 @@
     if (p === "/compare") return { page: "compare" };
     if (p === "/leaderboard") return { page: "leaderboard" };
     if (p === "/review") return { page: "review" };
+    if (p.startsWith("/reports/")) {
+      return {
+        page: "reports",
+        slug: decodeURIComponent(p.slice("/reports/".length)),
+      };
+    }
+    if (p === "/reports") return { page: "reports" };
     if (p === "/new") return { page: "new" };
     return { page: "matrix" };
   }
@@ -86,6 +95,7 @@
   <a href="#/leaderboard" class:current={route.page === "leaderboard"}>
     Leaderboard
   </a>
+  <a href="#/reports" class:current={route.page === "reports"}>Reports</a>
   <a href="#/new" class:current={route.page === "new"}>New Task</a>
   {#if live}
     <span class="live" title="{live.task} × {live.model}">
@@ -107,6 +117,10 @@
     <Leaderboard />
   {:else if route.page === "review"}
     <ReviewMode />
+  {:else if route.page === "reports"}
+    {#key route.slug ?? ""}
+      <Reports slug={route.slug} />
+    {/key}
   {:else if route.page === "new"}
     <NewTask />
   {:else}

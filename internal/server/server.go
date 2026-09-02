@@ -22,8 +22,11 @@ type Config struct {
 	// hosted model) benchmarked alongside the llama-swap fleet. Each entry
 	// is "provider/model" or "provider/model=Display Name".
 	ExtraModels []string
-	Store       *store.Store
-	Runner      *runner.Runner
+	// ReportsDir holds per-model research reports (<slug>.md plus img/);
+	// a missing directory simply means no reports yet.
+	ReportsDir string
+	Store      *store.Store
+	Runner     *runner.Runner
 }
 
 type Server struct {

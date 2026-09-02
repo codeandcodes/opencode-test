@@ -128,3 +128,15 @@ export interface RunRef {
   model: string;
   timestamp: string;
 }
+
+export interface ReportMeta {
+  slug: string;
+  title: string;
+  updated_at: string;
+}
+
+export interface ReportDetail {
+  slug: string;
+  title: string;
+  markdown: string;
+}

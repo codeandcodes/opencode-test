@@ -29,7 +29,8 @@ in `reports/`, a row on the leaderboard, and raw runs on the bench host.
    - assign 1–10 per the rubric, POST via the verdict API with note prefix
      `[auto:claude]` so machine ratings are distinguishable from human ones;
    - never overwrite a human rating.
-5. **Report** — write `reports/<model-slug>.md`: exact served configuration,
+5. **Report** — write `reports/<model-slug>.md` (rendered in-app under the
+   **Reports** tab, served from `/api/reports`): exact served configuration,
    composite score + leaderboard position, per-task table, generation
    statistics (tokens in/out, decode time, first-token, wall), 3–5 findings
    with screenshots in `reports/img/`, and a **community-signal section**

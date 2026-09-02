@@ -39,6 +39,7 @@ func main() {
 	extraModels := flag.String("extra-models", "", "comma-separated provider-qualified reference models, e.g. opencode/x=Name")
 	lsCfg := flag.String("llama-swap-config", "", "path to llama-swap YAML config; when set, each run snapshots the model's serving entry into its provenance")
 	idleMin := flag.Int("idle-timeout", 10, "kill a job when its event stream is silent this many minutes (0 disables)")
+	reportsDir := flag.String("reports", "reports", "research report directory (<slug>.md plus img/)")
 	flag.Parse()
 
 	st := store.New(*runsDir)
@@ -54,6 +55,7 @@ func main() {
 		OpencodeBin:        *ocbin,
 		BatchStateFile:     stateFile,
 		ExtraModels:        extraModelList(*extraModels),
+		ReportsDir:         *reportsDir,
 		Store:              st,
 		Runner:             run,
 	})

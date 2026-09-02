@@ -1,5 +1,7 @@
 import type {
   FileEntry,
+  ReportDetail,
+  ReportMeta,
   MatrixResponse,
   Model,
   Result,
@@ -209,4 +211,14 @@ export async function getFileText(ref: RunRef, path: string): Promise<string> {
   const res = await fetch(fileUrl(ref, path));
   if (!res.ok) throw new Error(`failed to load ${path}: ${res.status}`);
   return res.text();
+}
+
+export function getReports(): Promise<ReportMeta[]> {
+  return request<ReportMeta[]>("/api/reports").then((r) =>
+    Array.isArray(r) ? r : [],
+  );
+}
+
+export function getReport(slug: string): Promise<ReportDetail> {
+  return request(`/api/reports/${enc(slug)}`);
 }
