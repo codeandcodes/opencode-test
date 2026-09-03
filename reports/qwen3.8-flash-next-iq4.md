@@ -112,3 +112,34 @@ Early coverage (release was a week ago; no official benchmarks yet):
   1 TB budget pending the approved AesSedai/bartowski/gpt-oss-F16 deletions.
 - Auto-ratings were calibrated against the existing human-rated fleet; all
   carry `[auto:claude]` notes and can be re-rated in the Review tab.
+
+---
+
+## Addendum (2026-09-04): the fast variant
+
+The user independently ran `Qwen3.8-Flash-Next-IQ4-fast` (same weights,
+thinking disabled, temp 0.7 / top-p 0.8 / presence 1.5) across the suite; the
+bench topped up the missing cells and `[auto:claude]` graded all ten apps.
+
+**Final: 75.0, tied #4 — with the highest app-quality average on the entire
+board (8.20 over 10).** Checks were the cost: 7/10 (http-api-contract and
+sql-analytics failed, plus one more miss vs the thinking variant's 9/10).
+
+| Variant | Score | Checks | Rating (n) | Notable |
+|---|---|---|---|---|
+| IQ4 (think) | 83.9 | 9/10 | 8.00 (9) | markdown-editor total failure (text dump) |
+| IQ4-fast | 75.0 | 7/10 | **8.20 (10)** | image-editor filter pipeline hangs |
+
+Two findings revise the thinking-mode story:
+
+1. **The text-dump failure is thinking-mode-specific.** Fast mode built a
+   working markdown editor — live preview, autosave, version history — on the
+   exact task where thinking mode emitted 32k tokens of chat text and wrote
+   nothing. Score one for disabling reasoning on large single-file outputs.
+2. **Thinking buys check-task correctness, not app quality.** Fast matched or
+   beat the thinking variant on eight of ten apps (four 9s: calendar,
+   dashboard with working brush, flowchart, kanban with enforced WIP). Its
+   one real defect: the image editor's async filter pipeline never completes
+   (spinner hangs forever, canvas pixels never change) — precisely the kind
+   of bug a verification pass would catch, echoing the Coder-Next report's
+   conclusion at smaller scale.
